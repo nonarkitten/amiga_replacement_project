@@ -1,4 +1,4 @@
-`include "arg_defs.vh"
+//`include "arg_defs.vh"
 
 // Copyright 2011, 2012 Frederic Requin
 //
@@ -26,53 +26,87 @@
 //  - The design does not have a reset input
 //  - The design uses strobe cycles for the vertical blanking and lines lengths
 //  - The design size is only 1120 LEs on a Cyclone III
+//
+// PIN #      DESIGNATION     FUNCTION                DEFINITION
+// -----      -----------     ------------------      ----------
+//  01-07     D6-D0           Data bus lines 6 to 0       I/O
+//  08        M1H             Mouse 1 horizontal          I
+//  09        M0H             Mouse 0 horizontal          I
+//  10-17     RGA8-RGA1       Register address bus 8-1    I
+//  18        BURST*          Color burst                 O
+//  19        VCC             +5 Volt                     I
+//  20-23     R0-R3           Video red bits 0-3          O
+//  24-27     B0-B3           Video blue bits 0-3         O
+//  28-31     G0-G3           Video green bits 0-3        O
+//  32        /CSYNC          Composite sync              I
+//  33        ZD*             Background indicator        O
+//  34        CDAC            CDAC clock                  I
+//  35        7M              7.15909  MHZ                I
+//  36        CCK             Color clock                 I
+//  37        VSS             Ground                      I
+//  38        M0V             Mouse 0 vertical            I
+//  39        M1V             Mouse 1 vertical            I
+//  40-48     D15-D7          Data bus lines 15 to 7      I/O
+//  
+//  CCK     3.58MHz Clock
+//  CCKQ    3.58MHz 90-degree shifted clock (Quadrature)
+//  7M      7.16MHz Clock
+//  
+//      __    __    __    __    __    __    __    __    __
+//  |__|  |__|  |__|  |__|  |__|  |__|  |__|  |__|  |__|  |__|  14M
+//      _____       _____       _____       _____       _____       
+//  ___|     |_____|     |_____|     |_____|     |_____|     |  7M
+//         _____       _____       _____       _____       ___   
+//  |_____|     |_____|     |_____|     |_____|     |_____|     CDAC (7M Quadrature)
+//  _________             ___________             ___________
+//           |___________|           |___________|           |  CCK (3.58MHz)
+//  ___             ___________             ___________       
+//     |___________|           |___________|           |______  CCKQ (3.58MHz Quadrature)
+//  
+//
+// Measured values:
+// ----------------
+//
+// HSSTRT : $01A (PAL), $01A (NTSC)
+// HSSTOP : $03B,$029 (PAL), $03B, $02B (NTSC)
+// HBSTRT : $00E (PAL), $00D (NTSC)
+// HBSTOP : $05C (PAL), $05C (NTSC)
+//
+// PAL interlaced:
+// ---------------
+//   8 x STREQU \
+//  18 x STRVBL  | 312 lines
+// 286 x STRHOR /
+//   9 x STREQU \
+//  17 x STRVBL  | 313 lines
+// 287 x STRHOR /
+//
+// PAL non-interlaced:
+// -------------------
+//   9 x STREQU \
+//  17 x STRVBL  | 313 lines
+// 287 x STRHOR /
+//
+// NTSC interlaced:
+// ----------------
+//  10 x STREQU \
+//  11 x STRVBL  | 262 lines with 131 x STRLONG
+// 241 x STRHOR /
+//  10 x STREQU \
+//  11 x STRVBL  | 263 lines with 131/132 x STRLONG
+// 242 x STRHOR /
+//
+// NTSC non-interlaced:
+// --------------------
+//  10 x STREQU \
+//  11 x STRVBL  | 263 lines with with 131/132 x STRLONG
+// 242 x STRHOR /
 
-/*
+// MiniMig          SLOC
+// Beamcounter.v    290
+// Bitplanes.v      390
+// Sprites.v        367
 
-clk, cck, cdac_r & cdac_f are generated using a PLL :
-
-wire clk;            // 28 MHz master clock
-wire w_c7m_rise;     // 7 MHz rising edge
-
-pll_28m pll_inst
-(
-  .areset(1'b0),
-  .inclk0(C7M),
-  .c0(clk),
-  .c1(),
-  .c2(),
-  .c3(w_c7m_rise),
-  .locked()
-);
-
-wire w_cck_rise;     // CCK rising edge
-wire w_cdac_rise;    // CDAC_n rising edge
-wire w_cdac_fall;    // CDAC_n falling edge
-
-reg       r_cck_gen; // Re-generated CCK
-reg [7:0] r_cck_ph;  // CCK clock phases
-reg [3:0] r_cdac_ph; // CDAC_n clock phases
-
-always@(posedge clk) begin
-  // CCK phases
-  if ((w_c7m_rise) && (CCK))
-    r_cck_ph <= 8'b00001000;
-  else
-    r_cck_ph <= { r_cck_ph[6:0], r_cck_ph[7] };
-  // Re-generated CCK
-  r_cck_gen <= r_cck_ph[0] | r_cck_ph[1] | r_cck_ph[2] | r_cck_ph[7];
-  // CDAC phases
-  if (w_c7m_rise)
-    r_cdac_ph <= 4'b0100;
-  else
-    r_cdac_ph <= { r_cdac_ph[2:0], r_cdac_ph[3] };
-end
-
-assign w_cck_rise  = r_cck_ph[0];
-assign w_cdac_rise = r_cdac_ph[0];
-assign w_cdac_fall = r_cdac_ph[2];
-
-*/
 
 module Denise
 (
@@ -99,44 +133,6 @@ module Denise
   output reg        sol,       // Start of line (HPOS = 32)
   output            pal_ntsc   // PAL (1), NSTC (0) flag
 );
-
-// Measured values:
-// ----------------
-
-// HSSTRT : $01A (PAL), $01A (NTSC)
-// HSSTOP : $03B,$029 (PAL), $03B, $02B (NTSC)
-// HBSTRT : $00E (PAL), $00D (NTSC)
-// HBSTOP : $05C (PAL), $05C (NTSC)
-
-// PAL interlaced:
-// ---------------
-//   8 x STREQU \
-//  18 x STRVBL  | 312 lines
-// 286 x STRHOR /
-//   9 x STREQU \
-//  17 x STRVBL  | 313 lines
-// 287 x STRHOR /
-
-// PAL non-interlaced:
-// -------------------
-//   9 x STREQU \
-//  17 x STRVBL  | 313 lines
-// 287 x STRHOR /
-
-// NTSC interlaced:
-// ----------------
-//  10 x STREQU \
-//  11 x STRVBL  | 262 lines with 131 x STRLONG
-// 241 x STRHOR /
-//  10 x STREQU \
-//  11 x STRVBL  | 263 lines with 131/132 x STRLONG
-// 242 x STRHOR /
-
-// NTSC non-interlaced:
-// --------------------
-//  10 x STREQU \
-//  11 x STRVBL  | 263 lines with with 131/132 x STRLONG
-// 242 x STRHOR /
 
 //////////////////////
 // DMA slot counter //
@@ -173,62 +169,19 @@ reg        r_wregs_diwh_p1;
 
 always@(posedge clk) begin
   // Rising edge of CDAC_n with CCK = 1
-  if (cdac_r & cck) begin
-    // CLXDAT : $00E
-    if (rga[8:1] == 8'b0_0000_111)
-      r_rregs_clx_p1 <= 1'b1;
-    else
-      r_rregs_clx_p1 <= 1'b0;
-    // Strobes : $038 - $03E
-    if (rga[8:3] == 6'b0_0011_1)
-      r_wregs_str_p1  <= 1'b1;
-    else
-      r_wregs_str_p1  <= 1'b0;
-    // DENISEID : $07C
-    if (rga[8:1] == 8'b0_0111_110)
-      r_rregs_id_p1 <= 1'b1;
-    else
-      r_rregs_id_p1 <= 1'b0;
-    // DIWSTRT : $08E
-    if (rga[8:1] == 8'b0_1000_111)
-      r_wregs_diwb_p1 <= 1'b1;
-    else
-      r_wregs_diwb_p1 <= 1'b0;
-    // DIWSTOP : $090
-    if (rga[8:1] == 8'b0_1001_000)
-      r_wregs_diwe_p1 <= 1'b1;
-    else
-      r_wregs_diwe_p1 <= 1'b0;
-    // CLXCON : $098
-    if (rga[8:1] == 8'b0_1001_100)
-      r_wregs_clx_p1 <= 1'b1;
-    else
-      r_wregs_clx_p1 <= 1'b0;
-    // BPLCONx : $100 - $106
-    if (rga[8:3] == 6'b1_0000_0)
-      r_wregs_ctl_p1  <= 1'b1;
-    else
-      r_wregs_ctl_p1  <= 1'b0;
-    // BPLxDAT : $110 - $11E
-    if (rga[8:4] == 5'b1_0001)
-      r_wregs_bpl_p1  <= 1'b1;
-    else
-      r_wregs_bpl_p1  <= 1'b0;
-    // Sprites : $140 - $17E
-    if (rga[8:6] == 3'b1_01)
-      r_wregs_spr_p1  <= 1'b1;
-    else
-      r_wregs_spr_p1  <= 1'b0;
-    // Color table : $180 - $1BE
-    if (rga[8:6] == 3'b1_10)
-      r_wregs_clut_p1 <= 1'b1;
-    else
-      r_wregs_clut_p1 <= 1'b0;
-    // DIWHIGH : $1E4
-    if (rga[8:1] == 8'b1_1110_010)
-      r_wregs_diwh_p1 <= 1'b1;
-    else
-      r_wregs_diwh_p1 <= 1'b0;
+  if (cdac_r & cck) begin    
+    r_rregs_clx_p1  <= (rga[8:1] == 8'b0_0000_111) ? 1'b1 : 1'b0; // CLXDAT:       $00E
+    r_wregs_str_p1  <= (rga[8:3] == 6'b0_0011_1  ) ? 1'b1 : 1'b0; // Strobes:      $038 - $03E
+    r_rregs_id_p1   <= (rga[8:1] == 8'b0_0111_110) ? 1'b1 : 1'b0; // DENISEID:     $07C
+    r_wregs_diwb_p1 <= (rga[8:1] == 8'b0_1000_111) ? 1'b1 : 1'b0; // DIWSTRT:      $08E
+    r_wregs_diwe_p1 <= (rga[8:1] == 8'b0_1001_000) ? 1'b1 : 1'b0; // DIWSTOP:      $090
+    r_wregs_clx_p1  <= (rga[8:1] == 8'b0_1001_100) ? 1'b1 : 1'b0; // CLXCON:       $098
+    r_wregs_ctl_p1  <= (rga[8:3] == 6'b1_0000_0  ) ? 1'b1 : 1'b0; // BPLCONx:      $100 - $106
+    r_wregs_bpl_p1  <= (rga[8:4] == 5'b1_0001    ) ? 1'b1 : 1'b0; // BPLxDAT:      $110 - $11E
+    r_wregs_spr_p1  <= (rga[8:6] == 3'b1_01      ) ? 1'b1 : 1'b0; // Sprites:      $140 - $17E
+    r_wregs_clut_p1 <= (rga[8:6] == 3'b1_10      ) ? 1'b1 : 1'b0; // Color table:  $180 - $1BE
+    r_wregs_diwh_p1 <= (rga[8:1] == 8'b1_1110_010) ? 1'b1 : 1'b0; // DIWHIGH:      $1E4
+
     // Latch RGA bits 5 - 1 for next cycle
     r_rga_p1 <= rga[5:1];
   end
@@ -971,15 +924,18 @@ assign w_CLXDAT[12] = r_spr_clx_p5[1] & r_spr_clx_p5[2]; // Sprites #2 and #4
 assign w_CLXDAT[11] = r_spr_clx_p5[0] & r_spr_clx_p5[3]; // Sprites #0 and #6
 assign w_CLXDAT[10] = r_spr_clx_p5[0] & r_spr_clx_p5[2]; // Sprites #0 and #4
 assign w_CLXDAT[9]  = r_spr_clx_p5[0] & r_spr_clx_p5[1]; // Sprites #0 and #2
+
 // Sprites-bitplanes collisions
 assign w_CLXDAT[8]  = w_even_clx_p5   & r_spr_clx_p5[3]; // Even and Sprite #6
 assign w_CLXDAT[7]  = w_even_clx_p5   & r_spr_clx_p5[2]; // Even and Sprite #4
 assign w_CLXDAT[6]  = w_even_clx_p5   & r_spr_clx_p5[1]; // Even and Sprite #2
 assign w_CLXDAT[5]  = w_even_clx_p5   & r_spr_clx_p5[0]; // Even and Sprite #0
+
 assign w_CLXDAT[4]  = w_odd_clx_p5    & r_spr_clx_p5[3]; // Odd and Sprite #6
 assign w_CLXDAT[3]  = w_odd_clx_p5    & r_spr_clx_p5[2]; // Odd and Sprite #4
 assign w_CLXDAT[2]  = w_odd_clx_p5    & r_spr_clx_p5[1]; // Odd and Sprite #2
 assign w_CLXDAT[1]  = w_odd_clx_p5    & r_spr_clx_p5[0]; // Odd and Sprite #0
+
 // Bitplanes-bitplanes collisions
 assign w_CLXDAT[0]  = w_odd_clx_p5    & w_even_clx_p5;
 
@@ -1085,30 +1041,34 @@ always@(posedge clk) begin
     if (r_spr_sel_p7)
       // RGB color from sprites
       r_rgb_p8 <= w_clut_rgb_p7;
+      
     else begin
       // RGB color from playfields
 
       // Blue component
       if (r_ham_sel_p7[0])
-        r_rgb_p8[3:0] <= r_ham_rgb_p7[3:0]; // HAM
-      else if (r_ehb_sel_p7)
-        r_rgb_p8[3:0] <= { 1'b0, w_clut_rgb_p7[3:1] }; // EHB
-      else
-        r_rgb_p8[3:0] <= w_clut_rgb_p7[3:0]; // CLUT
-      // Green component
-      if (r_ham_sel_p7[1])
-        r_rgb_p8[7:4] <= r_ham_rgb_p7[7:4]; // HAM
-      else if (r_ehb_sel_p7)
-        r_rgb_p8[7:4] <= { 1'b0, w_clut_rgb_p7[7:5] }; // EHB
-      else
-        r_rgb_p8[7:4] <= w_clut_rgb_p7[7:4]; // CLUT
+        r_rgb_p8[3:0] <= r_ham_rgb_p7[3:0];              // HAM
+      else if (r_ehb_sel_p7)                             
+        r_rgb_p8[3:0] <= { 1'b0, w_clut_rgb_p7[3:1] };   // EHB
+      else                                               
+        r_rgb_p8[3:0] <= w_clut_rgb_p7[3:0];             // CLUT
+                                                         
+      // Green component                                 
+      if (r_ham_sel_p7[1])                               
+        r_rgb_p8[7:4] <= r_ham_rgb_p7[7:4];              // HAM
+      else if (r_ehb_sel_p7)                             
+        r_rgb_p8[7:4] <= { 1'b0, w_clut_rgb_p7[7:5] };   // EHB
+      else                                               
+        r_rgb_p8[7:4] <= w_clut_rgb_p7[7:4];             // CLUT
+        
       // Red component
       if (r_ham_sel_p7[2])
-        r_rgb_p8[11:8] <= r_ham_rgb_p7[11:8]; // HAM
+        r_rgb_p8[11:8] <= r_ham_rgb_p7[11:8];            // HAM
       else if (r_ehb_sel_p7)
         r_rgb_p8[11:8] <= { 1'b0, w_clut_rgb_p7[11:9] }; // EHB
       else
-        r_rgb_p8[11:8] <= w_clut_rgb_p7[11:8]; // CLUT
+        r_rgb_p8[11:8] <= w_clut_rgb_p7[11:8];           // CLUT
+        
     end
   end
 end
@@ -1164,7 +1124,7 @@ module color_table
   output [11:0] clut_rgb
 );
 
-`ifdef SIMULATION
+//`ifdef SIMULATION
 
 // Infered block RAM
 reg  [11:0] r_mem_clut [0:31];
@@ -1188,30 +1148,36 @@ end
 
 assign clut_rgb = r_q_p1;
 
-`else
+// `else
 
-// Declared Altera block RAM
-altsyncram U_altsyncram_32x12
+// // Declared Altera block RAM
+// altsyncram U_altsyncram_32x12
+// (
+//   // Port A : write side (Copper or CPU)
+//   .clock0    (clk),
+//   .wren_a    (cpu_wr),
+//   .address_a (cpu_idx),
+//   .data_a    (cpu_rgb),
+//   // Port B : read side (Bitplanes or Sprites)
+//   .clock1    (clk),
+//   .rden_b    (clut_rd),
+//   .address_b (clut_idx),
+//   .q_b       (clut_rgb)
+// );
+// defparam 
+//   U_altsyncram_32x12.operation_mode = "DUAL_PORT",
+//   U_altsyncram_32x12.width_a        = 12,
+//   U_altsyncram_32x12.widthad_a      = 5,
+//   U_altsyncram_32x12.width_b        = 12,
+//   U_altsyncram_32x12.widthad_b      = 5,
+//   U_altsyncram_32x12.outdata_reg_b  = "CLOCK1";
+
+// `endif
+
+endmodule
+
+module main
 (
-  // Port A : write side (Copper or CPU)
-  .clock0    (clk),
-  .wren_a    (cpu_wr),
-  .address_a (cpu_idx),
-  .data_a    (cpu_rgb),
-  // Port B : read side (Bitplanes or Sprites)
-  .clock1    (clk),
-  .rden_b    (clut_rd),
-  .address_b (clut_idx),
-  .q_b       (clut_rgb)
 );
-defparam 
-  U_altsyncram_32x12.operation_mode = "DUAL_PORT",
-  U_altsyncram_32x12.width_a        = 12,
-  U_altsyncram_32x12.widthad_a      = 5,
-  U_altsyncram_32x12.width_b        = 12,
-  U_altsyncram_32x12.widthad_b      = 5,
-  U_altsyncram_32x12.outdata_reg_b  = "CLOCK1";
-
-`endif
 
 endmodule
