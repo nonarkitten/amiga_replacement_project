@@ -1,8 +1,7 @@
 //`include "arg_defs.vh"
 
-// Copyright 2011, 2012 Frederic Requin
-//
-// This file is part of the MCC216 project
+// Copyright 2011, 2012 Frederic Requin; part of the MCC216 project
+// Copyright 2020, Renee Cousins; part of the Amiga Replacement Project
 //
 // Denise re-implementation is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -120,37 +119,8 @@
 // 4A	M1H		H Pulese    CCK low
 // 4B	M1H		HQ Pulse    CCK high
 
-reg [15:0] r_JOY0DAT;         // 8'b00000101
-reg [15:0] r_JOY1DAT;         // 8'b00000110
-reg [15:0] r_JOYTEST;         // 8'b00011011
 
-module denise_quad
-(
-	input clk;
-	input quadMux;
-	output [7:0] count;
-);
-	reg [2:0] quadA_delayed, quadB_delayed;
-	reg [7:0] count;
-		
-	always @(negedge clk) quadA_delayed <= { quadA_delayed[1:0], quadMux };
-	always @(posedge clk) quadB_delayed <= { quadB_delayed[1:0], quadMux };
 
-	wire count_enable    = quadA_delayed[1] ^ quadA_delayed[2] ^ quadB_delayed[1] ^ quadB_delayed[2];
-	wire count_direction = quadA_delayed[1] ^ quadB_delayed[2];
-
-	always @(posedge clk) begin
-		if(count_enable) begin
-			if(count_direction) count <= count+1; 
-			else count <= count-1;
-		end
-	end
-endmodule
-
-denise_quad m0h(cckq, m0h_in, r_JOY0DAT[7:0]);
-denise_quad m0v(cckq, m0v_in, r_JOY0DAT[15:8]);
-denise_quad m1h(cckq, m1h_in, r_JOY1DAT[7:0]);
-denise_quad m1v(cckq, m1v_in, r_JOY1DAT[15:8]);
 
 module Denise
 (
@@ -1174,80 +1144,5 @@ assign blank_n = r_blank_n_p10;
 
 endmodule
 
-////////////////////////
-// Color lookup table //
-////////////////////////
 
-// CLUT Latency is :
-// -----------------
-// 28 MHz : 1 cycle
-// CDAC_n : 0.5 cycles
 
-module color_table
-(
-  input         clk,
-  input         cpu_wr,
-  input   [4:0] cpu_idx,
-  input  [11:0] cpu_rgb,
-  input         clut_rd,
-  input   [4:0] clut_idx,
-  output [11:0] clut_rgb
-);
-
-//`ifdef SIMULATION
-
-// Infered block RAM
-reg  [11:0] r_mem_clut [0:31];
-
-// Write port
-always@(posedge clk) begin
-  if (cpu_wr) begin
-    r_mem_clut[cpu_idx] <= cpu_rgb;
-  end
-end
-
-reg  [11:0] r_q_p0;
-reg  [11:0] r_q_p1;
-
-// Read port
-always@(posedge clk) begin
-  if (clut_rd)
-    r_q_p0 <= r_mem_clut[clut_idx];
-  r_q_p1 <= r_q_p0;
-end
-
-assign clut_rgb = r_q_p1;
-
-// `else
-
-// // Declared Altera block RAM
-// altsyncram U_altsyncram_32x12
-// (
-//   // Port A : write side (Copper or CPU)
-//   .clock0    (clk),
-//   .wren_a    (cpu_wr),
-//   .address_a (cpu_idx),
-//   .data_a    (cpu_rgb),
-//   // Port B : read side (Bitplanes or Sprites)
-//   .clock1    (clk),
-//   .rden_b    (clut_rd),
-//   .address_b (clut_idx),
-//   .q_b       (clut_rgb)
-// );
-// defparam 
-//   U_altsyncram_32x12.operation_mode = "DUAL_PORT",
-//   U_altsyncram_32x12.width_a        = 12,
-//   U_altsyncram_32x12.widthad_a      = 5,
-//   U_altsyncram_32x12.width_b        = 12,
-//   U_altsyncram_32x12.widthad_b      = 5,
-//   U_altsyncram_32x12.outdata_reg_b  = "CLOCK1";
-
-// `endif
-
-endmodule
-
-module main
-(
-);
-
-endmodule
