@@ -16,9 +16,9 @@
 //
 
 module rga_decodeer(
-	input      [8:1] rga;
-	output     [9:0] enable;	
-	output reg [8:1] rga_out;
+  input      [8:1] rga;
+  output     [9:0] enable;	
+  output reg [8:1] rga_out;
 );
 
 // Reset enable lines for edge detection
