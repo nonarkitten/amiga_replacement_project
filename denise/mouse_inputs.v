@@ -17,14 +17,14 @@
 // When S is high, we pick the "B"
 // When S is low, we pick the "A"
 //
-// 1A	M0V		V Pulse		CCK low
-// 1B	M0V		VQ Pulse	CCK high
-// 2A	M0H		H Pulese    CCK low
-// 2B	M0H		HQ Pulse    CCK high
-// 3A	M1V		V Pulse     CCK low
-// 3B	M1V		VQ Pulse    CCK high
-// 4A	M1H		H Pulese    CCK low
-// 4B	M1H		HQ Pulse    CCK high
+// 1A	M0V	V Pulse     CCK low
+// 1B	M0V	VQ Pulse    CCK high
+// 2A	M0H	H Pulese    CCK low
+// 2B	M0H	HQ Pulse    CCK high
+// 3A	M1V	V Pulse     CCK low
+// 3B	M1V	VQ Pulse    CCK high
+// 4A	M1H	H Pulese    CCK low
+// 4B	M1H	HQ Pulse    CCK high
 //
 // CLK should sample on CCKQ
 //
