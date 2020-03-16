@@ -108,6 +108,49 @@
 // Bitplanes.v      390
 // Sprites.v        367
 
+// When S is high, we pick the "B"
+// WHen S is low, we pick the "A"
+//
+// 1A	M0V		V Pulse		CCK low
+// 1B	M0V		VQ Pulse	CCK high
+// 2A	M0H		H Pulese    CCK low
+// 2B	M0H		HQ Pulse    CCK high
+// 3A	M1V		V Pulse     CCK low
+// 3B	M1V		VQ Pulse    CCK high
+// 4A	M1H		H Pulese    CCK low
+// 4B	M1H		HQ Pulse    CCK high
+
+reg [15:0] r_JOY0DAT;         // 8'b00000101
+reg [15:0] r_JOY1DAT;         // 8'b00000110
+reg [15:0] r_JOYTEST;         // 8'b00011011
+
+module denise_quad
+(
+	input clk;
+	input quadMux;
+	output [7:0] count;
+);
+	reg [2:0] quadA_delayed, quadB_delayed;
+	reg [7:0] count;
+		
+	always @(negedge clk) quadA_delayed <= { quadA_delayed[1:0], quadMux };
+	always @(posedge clk) quadB_delayed <= { quadB_delayed[1:0], quadMux };
+
+	wire count_enable    = quadA_delayed[1] ^ quadA_delayed[2] ^ quadB_delayed[1] ^ quadB_delayed[2];
+	wire count_direction = quadA_delayed[1] ^ quadB_delayed[2];
+
+	always @(posedge clk) begin
+		if(count_enable) begin
+			if(count_direction) count <= count+1; 
+			else count <= count-1;
+		end
+	end
+endmodule
+
+denise_quad m0h(cckq, m0h_in, r_JOY0DAT[7:0]);
+denise_quad m0v(cckq, m0v_in, r_JOY0DAT[15:8]);
+denise_quad m1h(cckq, m1h_in, r_JOY1DAT[7:0]);
+denise_quad m1v(cckq, m1v_in, r_JOY1DAT[15:8]);
 
 module Denise
 (
@@ -167,11 +210,22 @@ reg        r_wregs_bpl_p1;
 reg        r_wregs_spr_p1;
 reg        r_wregs_clut_p1;
 reg        r_wregs_diwh_p1;
+reg        r_rregs_joy0_p1;
+reg        r_rregs_joy1_p1;
+reg        w_rregs_joy_p1;
+
+reg [15:0] r_JOY0DAT;         // 8'b00000101
+reg [15:0] r_JOY1DAT;         // 8'b00000110
+reg [15:0] r_JOYTEST;         // 8'b00011011
+
 
 always@(posedge clk) begin
   // Rising edge of CDAC_n with CCK = 1
   if (cdac_r & cck) begin    
+    r_rregs_joy0_p1 <= (rga[8:1] == 8'b0_0000_101) ? 1'b1 : 1'b0; // JOY0DAT:      $00A
+    r_rregs_joy1_p1 <= (rga[8:1] == 8'b0_0000_110) ? 1'b1 : 1'b0; // JOY0DAT:      $00C
     r_rregs_clx_p1  <= (rga[8:1] == 8'b0_0000_111) ? 1'b1 : 1'b0; // CLXDAT:       $00E
+    w_rregs_joy_p1  <= (rga[8:1] == 8'b0_0011_011) ? 1'b1 : 1'b0; // JOYTEST:      $036
     r_wregs_str_p1  <= (rga[8:3] == 6'b0_0011_1  ) ? 1'b1 : 1'b0; // Strobes:      $038 - $03E
     r_rregs_id_p1   <= (rga[8:1] == 8'b0_0111_110) ? 1'b1 : 1'b0; // DENISEID:     $07C
     r_wregs_diwb_p1 <= (rga[8:1] == 8'b0_1000_111) ? 1'b1 : 1'b0; // DIWSTRT:      $08E
@@ -949,10 +1003,25 @@ reg [14:0] r_CLXDAT;
 always@(posedge clk) begin
   // Rising edge of CDAC_n with CCK = 0
   if (cdac_r & ~cck) begin
-    db_out <= ({ 1'b0, r_CLXDAT } & {16{r_rregs_clx_p1}})  // CLXDAT register
-            | (16'hFFFC & {16{cfg_ecs & r_rregs_id_p1}}); // DENISEID register
-    db_oen <= r_rregs_clx_p1 | (cfg_ecs & r_rregs_id_p1);
+  	if(r_rregs_clx_p1) begin
+  	  db_out <= { 1'b0, r_CLXDAT };
+      db_oen <= 1'b1;
+  	  
+  	end else if(r_rregs_id_p1 && cfg_ecs) begin
+  	  db_out <= 16'hFFFC;
+      db_oen <= 1'b1;
+  	
+  	end else if(r_rregs_joy0_p1) begin
+  	  db_out <= r_JOY0DAT;
+      db_oen <= 1'b1;
+  	
+  	end else if(r_rregs_joy1_p1) begin
+  	  db_out <= r_JOY1DAT;
+      db_oen <= 1'b1;
+  	
+  	end
   end
+  
   if (cdac_r | cdac_f) begin
     if (cdac_r & ~cck & r_rregs_clx_p1)
     // CLXDAT read : clear the register
