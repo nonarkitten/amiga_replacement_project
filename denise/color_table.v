@@ -16,6 +16,11 @@
 //
 // This file implements the dual port SRAM for the color look up table
 
+// CLUT Latency is :
+// -----------------
+// 28 MHz : 1 cycle
+// CDAC_n : 0.5 cycles
+
 module color_table
 (
   input         clk,
