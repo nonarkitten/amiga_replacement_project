@@ -346,42 +346,28 @@ Denise Denise_inst
   .sol(w_sol),
   .pal_ntsc()
 );
-
-////////////////////////////
-// Instantiate Paula chip //
-////////////////////////////
-
-wire        w_dmal;
-wire [15:0] w_dbo_p;
-wire        w_dbo_p_en;
-
-Paula Paula_inst
-(
-  .rst(r_srst),
-  .clk(w_clk),
-  .clk_28m(w_clk_28m),
-  .cck(w_cck),
-  .cdac_r(w_cdac_rise),
-  .cdac_f(w_cdac_fall),
-  .cfg_ecs(1'b1),
-  .cfg_a1k(1'b0),
-  .rga(w_rga),
-  .dbi(w_dbi),
-  .dbo(w_dbo_p),
-  .dbo_en(w_dbo_p_en),
-  .int2_n(1'b1),
-  .int3_n(1'b1),
-  .int6_n(1'b1),
-  .ipl_n(),
-  .rxd(1'b1),
-  .txd(),
-  .dmal(w_dmal),
-  .dkrd_n(1'b1),
-  .dkwr_n(),
-  .dkwe(),
-  .aud_l(AUDIO_L),
-  .aud_r(AUDIO_R)
+  
+denise_quad m0h(
+  .clk(cckq), 
+  .quadMux(m0h_in),
+  .count(r_JOY0DAT[7:0])
 );
+denise_quad m0v(
+  .clk(cckq), 
+  .quadMux(m0v_in),
+  .count(r_JOY0DAT[15:8])
+);
+denise_quad m1h(
+  .clk(cckq),
+  .quadMux(m1h_in),
+  .count(r_JOY1DAT[7:0])
+);
+denise_quad m1v(
+  .clk(cckq),
+  .quadMux(m1v_in),
+  .count(r_JOY1DAT[15:8])
+);
+
 
 /////////////////
 // Scandoubler //
