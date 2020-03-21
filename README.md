@@ -6,6 +6,8 @@ This is an attempt to make clean Verilog sources for each chip on the Amiga. Unl
 
 To view the plan of record for each chip, please visit the README.md for each project.
 
+Much of the work is based on the excellent efforts of Dennis van Weeren and Frederic Requin (https://github.com/fredrequin).
+
 ## OCS
 Our OCS goal will include a 512KB Agnus, Denise and Paula supporting basic NTSC and PAL modes. OCS should be drop-in compatible with the Amiga 1000 "skinny" Agnus as well as the early "fat" Agnus on Amiga 500 and 2000 systems. Eventually we will have a DIP 48 solution for this as well.
 
