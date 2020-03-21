@@ -37,7 +37,7 @@ While many of the modes depend on the improvement in bandwidth, not all of them 
 There are two steps that could open up better bandwidth and require that Agnus have it's own RAM.
 1. use FP/EDO DRAM; this allows double-CAS mode that is 1/2 way to full AGA; I do not expect this to fail -- it might be better to jump the shark here though and use SDRAM which would open up more opportunities later; note that SDRAM is the highest tech level we can use before voltage differences become a big problem
 2. use faster data bus; this requires 70ns memory to reach full AGA speed; however, quad data rate on the data bus might not be possible with the parasitic capacitance of 1980's level tech; if this works, it would be the simplest solution to hit AGA speeds on ECS motherboards
-3. split the data bus form DRAM and use lower voltages and/or differential signalling between the chips; this of course adds latency AND greatly complicates the data bus handling but may be required if the hardware doesn't like QDR.
+3. split the data bus from DRAM and use lower voltages and/or differential signalling between the chips; this of course adds latency AND greatly complicates the data bus handling but may be required if the hardware doesn't like QDR.
 
 ### Advanced Lisa
 Additionally, the improvements from the Vampire AGA may be added.
