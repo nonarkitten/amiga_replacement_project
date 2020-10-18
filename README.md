@@ -2,6 +2,10 @@
 
 _"To make replacements for all the custom chips of the AMIGA, useable in any real AMIGA."_
 
+The files herein are presented as a work-in-progress.
+
+All documentation is provided for the benefit of the community and the preservation of the original Amiga.
+
 This is an attempt to make clean Verilog sources for each chip on the Amiga. Unlike MiniMig and related implementations, this seeks to maintain perfect compatibility with the whole chip and the whole chip only to serve as a second-source to the slowly disappearing stock of Amiga chips. These will be drop-in replacements.
 
 To view the plan of record for each chip, please visit the README.md for each project.
