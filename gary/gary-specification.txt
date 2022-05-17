@@ -1,0 +1,317 @@
+
+
+
+
+
+
+
+
+		A500/A2000 Gary Specification
+
+
+
+
+
+
+
+
+
+
+
+1. DEFINITION
+
+  1.1 GENERAL DESCRIPTION
+	
+      This IC contains miscellaneous control circuitry which provides
+      interface and control for systems using the Amiga custom chip set and a
+      68000 micro-procesor. 
+
+
+  1.2 PIN CONFIGURATION 
+
+       (Pin out diagram needed here)
+
+2. FUNCTIONAL DESCRIPTION
+
+    
+  2.1 PIN DESCRIPTION
+
+
+ 				ACTV
+      PIN	NAME	TYPE	PLTY	DESCRIPTION
+      ---	----	----	----	--------------------------
+       1	VSS	PWR		Common ground supply
+       2	NVPA	OUT	LO	Valid peripheral address 
+       3	NCDR	OUT	LO	Enable video bus read buffers
+       4	NCDW	OUT	LO	Enable video bus output buffers
+       5	NKRES	IN	LO	Power-up/Keybd Reset 
+       6	VDD	PWR		Common 5v supply
+       7	NMTR	IN	LO	Disk motor enable 
+       8	NDKWD	IN	LO	Disk write data
+       9	NDKWE	IN	HI	Disk write enable
+      10	NLDS	IN	LO	68000 lower byte data strobe
+      11	NUDS	IN	LO	68000 upper byte data strobe
+      12	PRW	IN	LO	68000 write enable
+      13	NAS	IN	LO	68000 Adress strobe
+      14	NBGACK	IN	LO	Bus grant acknowledge 
+      15	NDBR	IN	LO	DMA bus request 
+      16	NSEL0	IN	LO	(??)
+      17	VDD	PWR		Common 5v supply
+      18	NRGAE	OUT	LO	Amiga chip register address decode
+      19	NBLS	OUT	LO	Blitter slowdown
+      20	NRAME	OUT	LO	Video RAM address decode
+      21	NROME	OUT	LO	On-board ROM address decode
+      22	NRTCR	OUT	LO	Real time clock read enable
+      23	NRTCW	OUT	LO	Real time clock write enable
+      24	VSS	PWR		Common ground supply
+      25	C4	OUT	LO	Enable video bus read latch
+      26	NCDAC	IN	CLK	7.14Mhz clk (high while C3 changes)
+      27	C3	IN	CLK	3.57Mhz clk (90 deg lag of C1)
+      28	C1	IN	CLK	3.57Mhz clk 
+      29	NOVR	IN	LO	Override (internal decoding and DTACK)
+      30	OVL	IN	HI	Overlay (ROM to address 0)
+      31	XRDY	IN	HI	External ready
+      32	NEXP	IN	LO	Expansion Ram (present)
+      33	A17	IN	HI	68000 CPU Address
+      34	A18	IN	HI	68000 CPU Address
+      35	A19	IN	HI	68000 CPU Address
+      36	A20	IN	HI	68000 CPU Address
+      37	A21	IN	HI	68000 CPU Address
+      38	A22	IN	HI	68000 CPU Address
+      39	A23	IN	HI	68000 CPU Address
+      40	N/C			No connect
+      41	NRESET	OUT OD	LO	68000 reset (open-drain)
+      42	NHALT	OUT OD	LO	68000 halt (open-drain)
+      43	NDTACK	OUT TS	LO	Data transfer acknowledge (tri-state)
+      44	DKWEB	OUT	HI	Disk write enable buffered
+      45	DKWDB	OUT	HI	Disk write data buffered
+      46	MTR0D	OUT	HI	Latched disk 0 motor on (?)
+      47	MTRXD	OUT	HI	Buffered NMTR 
+      48	VDD	PWR		Common 5v supply
+
+
+  2.1 OPERATION DESCRIPTION
+
+      Address lines A17-A23 are connected to the processor address bus and are
+      used to generate the various device decodes. 
+
+      Expansion Ram signal is externally pulled up.  The expansion ram card
+      grounds this line.  This signal is used in the generation of NRAME. 
+
+      68000 bus timing: 
+
+      NAS (Not Address Strobe) indicates the start of a bus cycle and remains
+      asserted for the duration of the cycle.  Processor addresses (A1:23),
+      status FC0:2 and PRW are valid while NAS is asserted. 
+
+      NUDS/NLDS (Not Upper/Lower Data Strobes) indicated data is valid during
+      a write or enable read data to drive the data bus.  NUDS indicates valid
+      data on D7:15 and NLDS indicates valid data on D0:7. 
+
+      PRW (Processor Read/Write) indicates the direction of data buss
+      transfer.  PRW =0 is a processor write. 
+
+      NDTACK (Not Data Transfer ACKnowledge) is an open collector or tri-state
+      output drives the CPU NDTACK input.  The 68000 requires NDTACK=0 to
+      complete either a read or write cycle.  This signal sets up to the end
+      of processor state S4.  If NDTACK=0, the cycle will complete normally. 
+      If NDTACK=1, the processor will add wait states until NDTACK=0 before
+      advancing to S5 and then completing the cycle.  If NDTACK is never
+      asserted (=0), the processor will hang up. This circuit provides NDTACK
+      generation for all internal memory accesses and is available for
+      external device use (via XRDY) if desired.  If the external device
+      desires to control NDTACK directly, the NOVR signal can be asserted
+      which tri-states (or forces one in the case of open collector) the
+      NDTACK output. 
+
+      XRDY (eXternal ReaDY) input is used by external devices to control the
+      internal NDTACK generation in the case where NDTACK is needed to cause
+      processor wait states. If XRDY is not asserted by an external device,
+      the internal circuit will generate an NDTACK which does not generate any
+      processor wait states.  Since XRDY can only de-assert NDTACK, this
+      circuit will prevent the system from hanging up in the event that
+      non-existant memory locations are accessed. 
+
+      (include Welland timing diagram #3) 
+
+      NOVR (Not OVeRide) input directly disables the internal generation of
+      NDTACK and internal device selects.  This pin allows external devices to
+      map themselves in place of existing devices (such as ROM).  In this
+      case, the external device must assert it's own NDTACK.  The timing of
+      this circuit IS NOR RELIABLE FOR REPLACING VIDEO RAM (NRAME) OR VIDEO
+      REGISTERS (NROME). 
+
+      OVL (OVerLay) input causes ROM to be accessed at memory location 0. 
+      This signal is typically driven by a port line so that ROM is mapped to
+      the memory 0 at RESET time. 
+
+      NDBR (Not Data Bus Request) input indicates that the Amiga custom chips
+      are performing a video bus DMA.  The circuit delays generation of
+      NDTACK, thereby delaying the CPU if it attempts to access the video bus
+      address range while NDBR is asserted. 
+
+      NBLS (Not BLitter Slowdown) output drives the custom chip blitter
+      slowdown input.  When the CPU address in BANK6 area, NBLS is asserted. 
+
+      NBGACK (Not Bus Grant ACKnowledge) input indicates that an external DMA
+      devices has taken control of the processor busses. 
+
+      NRAME (Not RAM Enable) output indicates that the CPU is accessing video
+      bus RAM (this includes expansion RAM). 
+
+      NRGAE (Not RGA Enable) output indicates that the CPU is accessing Amiga
+      custom chip register space.; 
+
+      NCDR (Not C Data Read) output enables the output buffers of the video
+      bus data latch to drive the CPU data bus. 
+
+      NCDW (Not C Data Write) output enables the video data buffers to drive
+      the video data bus. 
+
+      C4 (Clock 4) output is used to latch data on the video data bus. 
+
+      NVPA (Not Valid Peripheral Address) output indicates that the CPU is
+      accessing an 6800 type peripheral (such as the 8520) and causes the CPU
+      to perform a 6800 compatible cycle. 
+
+      NROME (Not ROM Enable) output is the chip select for the internal 2Mb
+      ROM. 
+
+      NRTCR/NRTCW (Not Real Time Clock Read/Write) outputs are the read/write
+      enables used for data transfers to and from the the real time clock
+      circuit . 
+
+      Address Decoding - The address decoding generates internal memory bank
+      signals. 
+
+      Address Range		Bank
+      000000-1FFFFF		BANK0
+      200000-9FFFFF		BANK14 (1 through 4) 
+      A00000-BFFFFF		BANK5
+      C00000-DFFFFF		BANK6
+      E00000-FFFFFF		BANK7
+      C00000-C7FFFF		ERAM (expansion RAM, qualified by GO)
+      D80000-DB0000		NNAC (non auto config for RTC)
+      E00000-E7FFFF		NROM
+      FB0000-FFFFFF		NROM
+      000000-1FFFFF		NROM if OVR asserted
+
+      QUAL decode qualification is true only when NAS is asserted and both
+      NDTACK and NOVR are de-asserted.  Used to qualify RAM, RGA and ROM
+      selection. 
+
+      ROME is asserted when NROM is decoded and: 
+
+      1. Bus cycle is a read (PRW=1)
+      2. NAS is asserted
+      3. OVR is de-asserted
+
+      The NDTACK circuit has to generate NDTACK for all onboard devices and
+      also for expansion space (to avoid system hangs). ROM, RAM and custom
+      chip registers are special because it is necessary to synchronize them
+      top a specific phase of the C1,C3 clocks per the following diagram: 
+
+
+3. ELECTRICAL REQUIREMENTS
+
+  3.1 ABSOLUTE MAXIMUM RATINGS 
+
+      Stresses above those listed may cause permanent damage to the
+      circuit.  Functional operation of the device at these or any 
+      conditions other than those indicated in the operating conditions
+      of this specification is not implied.  Exposure to the maximum
+      ratings for extended periods may adversely affect device reliability.
+
+ 	 characteristic                     min    max   units
+	 --------------                    -----  -----  -----
+    3.1.1 ambient temperature under bias    -25     +125  deg. c.
+    3.1.2 storage temperature               -65     +150  deg. c.
+    3.1.3 applied supply voltage            -0.5    +7.0  volts
+    3.1.4 applied output voltage            -0.5    +5.5  volts
+    3.1.5 applied input  voltage            -0.5    +Vcc+0.5 volts
+    3.1.6 power dissipation                   -      500  mwatt
+
+  3.2 OPERATING CONDITIONS 
+
+      All electrical characteristics are specified over the entire 
+      range of the operating conditions unless specifically noted.  
+      All voltages are referenced to Vss = 0.0V. 
+
+	        Condition              Min    Max    Units
+	  ------------------------    -----  -----   -----
+    3.2.1 Supply voltage (Vcc)         4.75   5.25    volts
+    3.2.2 Free air temperature          0      70    Deg. C.
+    3.2.3 C1/C3 period                 270    280     ns
+    3.2.4 C1/C3 +/- pulse width	       130    150     ns
+    3.2.5 C1-C3 quadrature delay        65     75     ns
+    3.2.6 NCDAC +/- pulse width	        65     75     ns
+    3.2.7 NCDAC+ to C3 +/- delay        30     40     ns
+
+  3.3 INTERFACE CHARACTERISTICS 
+
+          Characteristic     Symbol   Min  Max  units     Conditions
+	  ------------------ ------   ---  ---  -----  ---------------
+    3.3.1 Input high level    Vih     2.0 Vcc+0.5 volts   
+    3.3.2 Input low  level    Vil    -0.5  0.8  volts
+    3.3.3 Output high level   Voh     2.4   -   volts   Ioh = -400ua
+    3.3.4 Output low  level   Vol     -    0.4  volts   Iol =  3.2ma
+    3.3.5 Input  leakage      Iin    -10   10   uamps   0.0v<Vin<Vcc
+    3.3.7 Supply current      Icc     -    25   mamps   Outputs open, 
+                                                        clocks operating
+							Vcc = 5.25V
+	   
+  3.4 SWITCHING CHARACTERISTICS 
+
+      Switching characteristics are specified for input waveforms 
+      switching between 0.4V low level and 2.4V high level with 10%-90%
+      rise and fall times of 10ns.  Outputs are loaded at the rated  
+      interface conditions with 130pf total capacitive load (including  
+      fixturing).  All time measurements of driven signals are referenced 
+      to 1.5V on inputs and outputs.  See figure (xx) for timing relationships.
+
+             Output          Input(s)      Delay Limit
+            --------       ------------  -------------------
+      3.4.1  NDTACK-       AS-,C3+       45ns max
+      3.4.2  NDTACK off(1) XRDY-         35ns max (w/o rise time)
+      3.4.3  NOVR-                       20ns max (w/o rise time)
+      3.4.4  NROME         AS-           50ns max (2)
+      3.4.5  NRAME         Addr,NEXP,C3- 60ns max
+      3.4.6  NRTCR         AS            50ns max (2)
+      3.4.7  NRTCW+        UDS/LDS+      30ns max
+      3.4.8  NCDR-         C1+           50ns max (2)
+      3.4.9      +         UDS/LDS+      50ns max (2)
+      3.4.10 NCDW-         PRW-          50ns max (2)
+      3.4.11     +         C1+           50ns max (2)
+      3.4.12 C4-           NCDAC-        25ns max
+      3.4.13   +           NCDAC-        50ns max (2)
+      3.4.14 NVPA          AS            50ns max (2)
+      3.4.15 HALT          RESET         50ns max (2)
+      3.4.16 DKWEB         DKWE          50ns max (2)
+      3.4.17 MTR0D         NSEL0         50ns max (2)
+      3.4.18 MTRXD         NMTR          50ns max (2)
+      3.4.19 DKWDB         NDKWD         50ns max (2)
+      3.4.20 NBLS-         C1+           50ns max (2)
+      3.4.21 NBLS+         C3-           50ns max (2)
+
+      (1) - NTDACK is a potential system problem in the case where NOVR is
+	    activited after AS- (S2) has already asserted NTDACK.  In this
+	    event, NDTACK can not be guaranteed to be pulled high before S5
+	    because of the pullup resistance and node capacitance.  This is
+	    the case with either Toshiba gate array or 5719. 
+
+      (2) - Many signals are not critical timings.  50ns was selected as a
+	    convenient, non-critical value. 
+	         	
+4. MECHANICAL REQUIREMENTS
+
+  4.1 Marking
+	  
+      Parts shall be marked with Commodore part number, manufacturers
+      identification and EIA data code.  Pin 1 shall be identified.
+
+  4.2 PACKAGING
+
+      The circuit shall be packaged in a standard plastic or ceramic 
+      48 pin dip with 0.100" pin to pin spacing and 0.600" pin row 
+      to pin row spacing.
+
