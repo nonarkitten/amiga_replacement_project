@@ -16,8 +16,10 @@
 
 
 Revision History
-2022-May-16: RNC Corrected open-drain and tri-state nature of pins 41~43
-2022-May-17: Added description of Pin 16 and pinout diagram
+2022-May-16: 	RNC Corrected open-drain and tri-state nature of pins 41~43
+2022-May-17:	Added description of Pin 16 
+		Added pinout diagram
+		Added timing diagram from Agnus
 
 1. DEFINITION
 
@@ -26,7 +28,6 @@ Revision History
       This IC contains miscellaneous control circuitry which provides
       interface and control for systems using the Amiga custom chip set and a
       68000 micro-procesor. 
-
 
   1.2 PIN CONFIGURATION 
 
@@ -108,7 +109,7 @@ Revision History
       43	NDTACK	OUT TS	LO	Data transfer acknowledge (tri-state)
       44	DKWEB	OUT	HI	Disk write enable buffered
       45	DKWDB	OUT	HI	Disk write data buffered
-      46	MTR0D	OUT	HI	Latched disk 0 motor on (?)
+      46	MTR0D	OUT	HI	Latched disk motor on NSEL0
       47	MTRXD	OUT	HI	Buffered NMTR 
       48	VDD	PWR		Common 5v supply
 
@@ -121,7 +122,30 @@ Revision History
       grounds this line.  This signal is used in the generation of NRAME. 
 
       68000 bus timing: 
-
+      
+       _   _   _   _   _   _   _   _   _   _   _   _   _   _   _   _
+      / \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_    28MHz
+      ___:       :       :_______________:       :       :____________         
+         \_______________/       :       \_______________/                C1 (CCK)
+      ___________:               :_______________:                ____ 
+                 \_______________/               \_______________/        C3 (CCKQ)
+      ____        ________        ________        ________        ____
+         \\______//      \\______//      \\______//      \\______//       7M (CPU)
+              ________        ________        ________        _______     
+      \______//      \\______//      \\______//      \\______//      \    7M (CDAC)
+	  
+                         |-------------------------------| 		  Cycles of Relevance
+      ___________                                 ____________________
+          \\\\\\\\_______________________________////////                 NAS, NRGE, NRAME
+             2       3       4       5       6       7       0       1    CPU State
+      ____________________________             _______________________
+                           \\\\\\\\___________////////                    PRW, NUDS, NLDS
+        
+      C1 and C3 transition when 28MHz Clock is low
+      7M CPU clock is derived from C1 and C3 (not vice-versa)
+      CDAC clock is derived from C2 and C4 (not vice-versa) 
+      7M CPU and CDAC clocks may be delayed slightly
+      
       NAS (Not Address Strobe) indicates the start of a bus cycle and remains
       asserted for the duration of the cycle.  Processor addresses (A1:23),
       status FC0:2 and PRW are valid while NAS is asserted. 
@@ -190,7 +214,8 @@ Revision History
       NCDW (Not C Data Write) output enables the video data buffers to drive
       the video data bus. 
 
-      C4 (Clock 4) output is used to latch data on the video data bus. 
+      C4 (Clock 4) output is used to latch data on the video data bus. It is
+      regenerating the original Amiga 1000 C4 that is absent in the 500/2000.
 
       NVPA (Not Valid Peripheral Address) output indicates that the CPU is
       accessing an 6800 type peripheral (such as the 8520) and causes the CPU
