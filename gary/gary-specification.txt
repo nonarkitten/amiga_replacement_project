@@ -15,8 +15,9 @@
 
 
 
-
-
+Revision History
+2022-May-16: RNC Corrected open-drain and tri-state nature of pins 41~43
+2022-May-17: Added description of Pin 16 and pinout diagram
 
 1. DEFINITION
 
@@ -29,16 +30,38 @@
 
   1.2 PIN CONFIGURATION 
 
-       (Pin out diagram needed here)
+               .--------..---------.
+      VSS    --| 1              48 |-- VDD
+      NVPA   -o| 2              47 |-- MTRXD
+      NCDR   -o| 3              46 |-- MTR0D
+      NCDW   -o| 4              45 |-- DKWDB
+      NKRES  -o| 5              44 |-- DKWEB
+      VDD    --| 6              43 |o- NDTACK
+      NMTR   -o| 7              42 |o- NHALT
+      NDKWD  -o| 8              41 |o- NRESET
+      NDKWE  --| 9              40 |-- N/C
+      NLDS   -o| 10             39 |-- A23
+      NUDS   -o| 11             38 |-- A22
+      PRW    -o| 12  CSG 5719   37 |-- A21
+      NAS    -o| 13   "GARY"    36 |-- A20
+      NBGACK -o| 14             35 |-- A19
+      NDBR   -o| 15             34 |-- A18
+      NSEL0  -o| 16             33 |-- A17
+      VDD    --| 17             32 |o- NEXP
+      NRGAE  -o| 18             31 |-- XRDY
+      NBLS   -o| 19             30 |-- OVL
+      NRAME  -o| 20             29 |o- NOVR
+      NROME  -o| 21             28 |-- C1
+      NRTCR  -o| 22             27 |-- C3
+      NRTCW  -o| 23             26 |-- NCDAC
+      VSS    --| 24             25 |o- C4
+               '-------------------'
 
 2. FUNCTIONAL DESCRIPTION
-
     
   2.1 PIN DESCRIPTION
-
-
  				ACTV
-      PIN	NAME	TYPE	PLTY	DESCRIPTION
+      PIN	NAME	TYPE	LVL	DESCRIPTION
       ---	----	----	----	--------------------------
        1	VSS	PWR		Common ground supply
        2	NVPA	OUT	LO	Valid peripheral address 
@@ -55,7 +78,7 @@
       13	NAS	IN	LO	68000 Adress strobe
       14	NBGACK	IN	LO	Bus grant acknowledge 
       15	NDBR	IN	LO	DMA bus request 
-      16	NSEL0	IN	LO	(??)
+      16	NSEL0	IN	LO	Disk motor select
       17	VDD	PWR		Common 5v supply
       18	NRGAE	OUT	LO	Amiga chip register address decode
       19	NBLS	OUT	LO	Blitter slowdown
@@ -71,7 +94,7 @@
       29	NOVR	IN	LO	Override (internal decoding and DTACK)
       30	OVL	IN	HI	Overlay (ROM to address 0)
       31	XRDY	IN	HI	External ready
-      32	NEXP	IN	LO	Expansion Ram (present)
+      32	NEXP	IN	LO	Expansion RAM (present)
       33	A17	IN	HI	68000 CPU Address
       34	A18	IN	HI	68000 CPU Address
       35	A19	IN	HI	68000 CPU Address
@@ -88,14 +111,13 @@
       46	MTR0D	OUT	HI	Latched disk 0 motor on (?)
       47	MTRXD	OUT	HI	Buffered NMTR 
       48	VDD	PWR		Common 5v supply
-
 
   2.1 OPERATION DESCRIPTION
 
       Address lines A17-A23 are connected to the processor address bus and are
       used to generate the various device decodes. 
 
-      Expansion Ram signal is externally pulled up.  The expansion ram card
+      Expansion RAM signal is externally pulled up.  The expansion RAM card
       grounds this line.  This signal is used in the generation of NRAME. 
 
       68000 bus timing: 
@@ -222,14 +244,14 @@
       of this specification is not implied.  Exposure to the maximum
       ratings for extended periods may adversely affect device reliability.
 
- 	 characteristic                     min    max   units
-	 --------------                    -----  -----  -----
-    3.1.1 ambient temperature under bias    -25     +125  deg. c.
-    3.1.2 storage temperature               -65     +150  deg. c.
-    3.1.3 applied supply voltage            -0.5    +7.0  volts
-    3.1.4 applied output voltage            -0.5    +5.5  volts
-    3.1.5 applied input  voltage            -0.5    +Vcc+0.5 volts
-    3.1.6 power dissipation                   -      500  mwatt
+ 	 Characteristic                     Min    Max    Units
+	 --------------                    -----  -----   -----
+    3.1.1 ambient temperature under bias    -25   +125     °C
+    3.1.2 storage temperature               -65   +150     °C
+    3.1.3 applied supply voltage            -0.5  +7.0    volts
+    3.1.4 applied output voltage            -0.5  +5.5    volts
+    3.1.5 applied input  voltage            -0.5 +Vcc+0.5 volts
+    3.1.6 power dissipation                   -    500    mwatt
 
   3.2 OPERATING CONDITIONS 
 
@@ -237,10 +259,10 @@
       range of the operating conditions unless specifically noted.  
       All voltages are referenced to Vss = 0.0V. 
 
-	        Condition              Min    Max    Units
+	  Condition                    Min    Max    Units
 	  ------------------------    -----  -----   -----
-    3.2.1 Supply voltage (Vcc)         4.75   5.25    volts
-    3.2.2 Free air temperature          0      70    Deg. C.
+    3.2.1 Supply voltage (Vcc)         4.75   5.25   volts
+    3.2.2 Free air temperature          0      70     oC
     3.2.3 C1/C3 period                 270    280     ns
     3.2.4 C1/C3 +/- pulse width	       130    150     ns
     3.2.5 C1-C3 quadrature delay        65     75     ns
@@ -249,16 +271,16 @@
 
   3.3 INTERFACE CHARACTERISTICS 
 
-          Characteristic     Symbol   Min  Max  units     Conditions
-	  ------------------ ------   ---  ---  -----  ---------------
+          Characteristic     Symbol   Min  Max    Units     Conditions
+	  ------------------ ------   ---  ---    -----  ---------------
     3.3.1 Input high level    Vih     2.0 Vcc+0.5 volts   
-    3.3.2 Input low  level    Vil    -0.5  0.8  volts
-    3.3.3 Output high level   Voh     2.4   -   volts   Ioh = -400ua
-    3.3.4 Output low  level   Vol     -    0.4  volts   Iol =  3.2ma
-    3.3.5 Input  leakage      Iin    -10   10   uamps   0.0v<Vin<Vcc
-    3.3.7 Supply current      Icc     -    25   mamps   Outputs open, 
-                                                        clocks operating
-							Vcc = 5.25V
+    3.3.2 Input low  level    Vil    -0.5  0.8    volts
+    3.3.3 Output high level   Voh     2.4   -     volts   Ioh = -400ua
+    3.3.4 Output low  level   Vol     -    0.4    volts   Iol =  3.2ma
+    3.3.5 Input  leakage      Iin    -10   10     uamps   0.0v<Vin<Vcc
+    3.3.7 Supply current      Icc     -    25     mamps   Outputs open, 
+                                                          clocks operating
+							  Vcc = 5.25V
 	   
   3.4 SWITCHING CHARACTERISTICS 
 
