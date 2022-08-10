@@ -1,0 +1,99 @@
+# Copyright (C) 2020, Stephen J. Leary
+# All rights reserved.
+#
+# This file is part of ReAgnus
+#
+# ReAgnus is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ReAgnus is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ReAgnus. If not, see <http://www.gnu.org/licenses/>.
+
+set_io --warn-no-port AS_N 24
+set_io --warn-no-port BLISS_N 9
+set_io --warn-no-port CASL_N 78
+set_io --warn-no-port CASU_N 74
+set_io --warn-no-port CDAC_N 42
+set_io --warn-no-port CSYNC_N 112
+set_io --warn-no-port HSYNC_N 117
+set_io --warn-no-port INTR_N 7
+set_io --warn-no-port LDS_N 63
+set_io --warn-no-port LPEN_N 110
+set_io --warn-no-port RAMEN_N 22
+set_io --warn-no-port RAS_N 73
+set_io --warn-no-port REGEN_N 17
+set_io --warn-no-port RESET_N 8
+set_io --warn-no-port UDS_N 75
+set_io --warn-no-port VSYNC_N 115
+set_io --warn-no-port WE_N 12
+set_io --warn-no-port XCLKEN_N 39
+set_io --warn-no-port BUSEN 105
+set_io --warn-no-port A<1> 84
+set_io --warn-no-port A<2> 83
+set_io --warn-no-port A<3> 87
+set_io --warn-no-port A<4> 85
+set_io --warn-no-port A<5> 90
+set_io --warn-no-port A<6> 88
+set_io --warn-no-port A<7> 94
+set_io --warn-no-port A<8> 91
+set_io --warn-no-port A<9> 97
+set_io --warn-no-port A<10> 95
+set_io --warn-no-port A<11> 99
+set_io --warn-no-port A<12> 98
+set_io --warn-no-port A<13> 104
+set_io --warn-no-port A<14> 102
+set_io --warn-no-port A<15> 106
+set_io --warn-no-port A<16> 113
+set_io --warn-no-port A<17> 107
+set_io --warn-no-port A<18> 114
+set_io --warn-no-port A<19> 80
+set_io --warn-no-port A<20> 41
+set_io --warn-no-port BLIT 16
+set_io --warn-no-port CCK 43
+set_io --warn-no-port CCKQ 45
+set_io --warn-no-port CLK7M 21
+set_io --warn-no-port CLK28M 20
+set_io --warn-no-port DMAL 10
+set_io --warn-no-port DRA<0> 49
+set_io --warn-no-port DRA<1> 48
+set_io --warn-no-port DRA<2> 55
+set_io --warn-no-port DRA<3> 52
+set_io --warn-no-port DRA<4> 60
+set_io --warn-no-port DRA<5> 56
+set_io --warn-no-port DRA<6> 62
+set_io --warn-no-port DRA<7> 61
+set_io --warn-no-port DRA<8> 64
+set_io --warn-no-port DRA<9> 79
+set_io --warn-no-port DRD<0> 4
+set_io --warn-no-port DRD<1> 2
+set_io --warn-no-port DRD<2> 1
+set_io --warn-no-port DRD<3> 144
+set_io --warn-no-port DRD<4> 143
+set_io --warn-no-port DRD<5> 142
+set_io --warn-no-port DRD<6> 139
+set_io --warn-no-port DRD<7> 138
+set_io --warn-no-port DRD<8> 135
+set_io --warn-no-port DRD<9> 134
+set_io --warn-no-port DRD<10> 130
+set_io --warn-no-port DRD<11> 129
+set_io --warn-no-port DRD<12> 124
+set_io --warn-no-port DRD<13> 122
+set_io --warn-no-port DRD<14> 120
+set_io --warn-no-port DRD<15> 119
+set_io --warn-no-port PAL_NTSC 47
+set_io --warn-no-port RGA<1> 38
+set_io --warn-no-port RGA<2> 37
+set_io --warn-no-port RGA<3> 33
+set_io --warn-no-port RGA<4> 34
+set_io --warn-no-port RGA<5> 29
+set_io --warn-no-port RGA<6> 32
+set_io --warn-no-port RGA<7> 25
+set_io --warn-no-port RGA<8> 28
+set_io --warn-no-port RW 19
