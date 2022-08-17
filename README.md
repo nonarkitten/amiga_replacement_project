@@ -2,9 +2,15 @@
 
 _"To make replacements for all the custom chips of the AMIGA, useable in any real AMIGA."_
 
+All documentation is provided for the benefit of the community and the preservation of the original Amiga.
+
 The files herein are presented as a work-in-progress.
 
-All documentation is provided for the benefit of the community and the preservation of the original Amiga.
+ReAgnus as developed by Stephen Leary the patents and any documentation included here for reference and may be considered Public Domain. I claim no licensing on any of these.
+
+ReAgnus developed by the Buffee Project (code named Willoe) is under the <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>. No part of which shall be used for any commercial gains without express and written permission from The Buffee Project.
+
+<a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="Creative Commons Licence" style="border-width:0" src="https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png" /></a>
 
 This is an attempt to make clean Verilog sources for each chip on the Amiga. Unlike MiniMig and related implementations, this seeks to maintain perfect compatibility with the whole chip and the whole chip only to serve as a second-source to the slowly disappearing stock of Amiga chips. These will be drop-in replacements.
 
