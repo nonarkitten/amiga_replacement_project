@@ -1,3 +1,5 @@
+`timescale 1 ns / 1 ps
+
 // Copyright 2022, Renee Cousins
 //
 // This file is part of the Amiga Replacement Project
@@ -40,8 +42,6 @@
 //  - The disk digital phase locked loop is based on patent #4,780,844
 //  - 3-word disk FIFO implementation
 //
-
-`include "arg_defs.vh"
 
 module Paula
 (
@@ -1293,41 +1293,42 @@ end
   reg          [2:0] r_mix_l;
   reg          [3:0] r_pwm;
 
-integer i;
+  //integer i;
 
-// Output is simply bit 2 of each
-aud_l = r_mix_l[2];
-aud_r = r_mix_r[2];
+  // Output is simply bit 2 of each
+  assign aud_l = r_mix_l[2];
+  assign aud_r = r_mix_r[2];
 
-always @(posedge clk) begin
-  // This portion needs to run at 3.58MHz!
-  if (!cck) begin
-    // PWM counter counts from 0 to 63 constantly
-    r_pwmcnt <= r_pwmcnt + 1;
+  always @(posedge clk) begin
+    // This portion needs to run at 3.58MHz!
+    if (!cck) begin
+      // PWM counter counts from 0 to 63 constantly
+      r_pwmcnt <= r_pwmcnt + 1;
 
-    // For each channel
-    for (i = 0; i < 4; i = i + 1) begin
-      // Check our PWM counter against our thresholds
-      if(r_volbuf[i][6])                         r_pwm[i] <= 1; // if 64 then volume is always on
-      else if(r_volbuf[i][5:0] == r_pwmcnt[5:0]) r_pwm[i] <= 0; // volume >= counter, set PWM
-      else if(r_pwmcnt[5:0] == 0)                r_pwm[i] <= 1; // counter 0, reset PWM
+      // For each channel
+      for (i = 0; i < 4; i = i + 1) begin
+        // Check our PWM counter against our thresholds
+        if(r_volbuf[i][6])                         r_pwm[i] <= 1; // if 64 then volume is always on
+        else if(r_volbuf[i][5:0] == r_pwmcnt[5:0]) r_pwm[i] <= 0; // volume >= counter, set PWM
+        else if(r_pwmcnt[5:0] == 0)                r_pwm[i] <= 1; // counter 0, reset PWM
 
-      // accumulate the channel pulse-density output
-      // high bit is captured the final carry out which we feed back for rounding
-      r_acc[i] <= r_acc[i][7:0] + { ~r_smpbuf[i][7], r_smpbuf[i][6:0] } + r_acc[i][8];
-    end
+        // accumulate the channel pulse-density output
+        // high bit is captured the final carry out which we feed back for rounding
+        r_acc[i] <= r_acc[i][7:0] + { ~r_smpbuf[i][7], r_smpbuf[i][6:0] } + r_acc[i][8];
+      end
 
-    // Left is channels 1 and 2
-    r_mix_l <= {2{(r_acc[1][8] & r_pwm[1])}}
-             + {2{(r_acc[2][8] & r_pwm[2])}}
-             + r_mix_l[i][0];
+      // Left is channels 1 and 2
+      r_mix_l <= {2{(r_acc[1][8] & r_pwm[1])}}
+               + {2{(r_acc[2][8] & r_pwm[2])}}
+               + r_mix_l[0];
 
-    // Right is channels 0 and 3
-    r_mix_r <= {2{(r_acc[0][8] & r_pwm[0])}}
-             + {2{(r_acc[3][8] & r_pwm[3])}}
-             + r_mix_r[i][0];    
-  end // if (!cck)
-end // always
+      // Right is channels 0 and 3
+      r_mix_r <= {2{(r_acc[0][8] & r_pwm[0])}}
+               + {2{(r_acc[3][8] & r_pwm[3])}}
+               + r_mix_r[0];    
+    end // if (!cck)
+  end // always
+endmodule
 
 // This module is based on :                                                    //
 // Patent #4,780,844 from Commodore-Amiga Inc.
