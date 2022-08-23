@@ -1,3 +1,16 @@
+// Copyright 2022, Renee Cousins
+//
+// This file is part of the Amiga Replacement Project
+// Any features below which were not part of the original Amiga chipset have
+// been removed and replaced with what is understood as the correct implementation
+// within the real chips.
+//
+// Changes:
+// --------
+//  - Removed 248-tap moving average filter because an RC filter is cheaper than FPGA space
+//  - Audio DAC is the correct PWM + PDM implementation on a real Paula; no multipliers needed
+//  - Code is proven on MiniMig, but needs verification on real hardware
+//
 // Copyright 2011, 2012 Frederic Requin
 //
 // This file is part of the MCC216 project
@@ -26,6 +39,7 @@
 //  - Audio DAC is a 3rd order delta-sigma with 90dB SNR
 //  - The disk digital phase locked loop is based on patent #4,780,844
 //  - 3-word disk FIFO implementation
+//
 
 `include "arg_defs.vh"
 
@@ -1266,304 +1280,54 @@ end
 // Channels mixing //
 /////////////////////
 
-wire signed  [7:0] w_audsmp [0:3];
-wire signed  [7:0] w_audvol [0:3];
-reg  signed [15:0] r_audres [0:3];
-reg         [15:0] r_aud_l;
-reg         [15:0] r_aud_r;
+  // inputs
+  //   reg  [6:0] r_volbuf  [0:3];
+  //   reg  [7:0]  r_smpbuf [0:3];
+  // outputs
+  //   aud_l (wire)
+  //   aud_r (wire)
+  // locals
+  reg          [5:0] r_pwmcnt;
+  reg          [8:0] r_acc    [0:3];
+  reg          [2:0] r_mix_r;
+  reg          [2:0] r_mix_l;
+  reg          [3:0] r_pwm;
 
-// Signed samples
-assign w_audsmp[0] = $signed(r_smpbuf[0]);
-assign w_audsmp[1] = $signed(r_smpbuf[1]);
-assign w_audsmp[2] = $signed(r_smpbuf[2]);
-assign w_audsmp[3] = $signed(r_smpbuf[3]);
+integer i;
 
-// Signed volumes with saturation to 64
-assign w_audvol[0] = r_volbuf[0][6] ? $signed(8'd64) : $signed({1'b0, r_volbuf[0]});
-assign w_audvol[1] = r_volbuf[1][6] ? $signed(8'd64) : $signed({1'b0, r_volbuf[1]});
-assign w_audvol[2] = r_volbuf[2][6] ? $signed(8'd64) : $signed({1'b0, r_volbuf[2]});
-assign w_audvol[3] = r_volbuf[3][6] ? $signed(8'd64) : $signed({1'b0, r_volbuf[3]});
+// Output is simply bit 2 of each
+aud_l = r_mix_l[2];
+aud_r = r_mix_r[2];
 
-// Multiply samples by volumes, combine channels
-always @(posedge rst or posedge clk) begin
-  if (rst) begin
-    r_audres[0] <= 16'd0;
-    r_audres[1] <= 16'd0;
-    r_audres[2] <= 16'd0;
-    r_audres[3] <= 16'd0;
-    r_aud_l     <= 16'd0;
-    r_aud_r     <= 16'd0;
-  end
-  else if ((cdac_r) && (cck)) begin
-    r_audres[0] <= w_audsmp[0] * w_audvol[0];
-    r_audres[1] <= w_audsmp[1] * w_audvol[1];
-    r_audres[2] <= w_audsmp[2] * w_audvol[2];
-    r_audres[3] <= w_audsmp[3] * w_audvol[3];
-    r_aud_l     <= $unsigned(r_audres[0]) + $unsigned(r_audres[3]);
-    r_aud_r     <= $unsigned(r_audres[1]) + $unsigned(r_audres[2]);
-  end
-end
+always @(posedge clk) begin
+  // This portion needs to run at 3.58MHz!
+  if (!cck) begin
+    // PWM counter counts from 0 to 63 constantly
+    r_pwmcnt <= r_pwmcnt + 1;
 
-////////////////////////////////////
-// Interpolator / low-pass filter //
-////////////////////////////////////
+    // For each channel
+    for (i = 0; i < 4; i = i + 1) begin
+      // Check our PWM counter against our thresholds
+      if(r_volbuf[i][6])                         r_pwm[i] <= 1; // if 64 then volume is always on
+      else if(r_volbuf[i][5:0] == r_pwmcnt[5:0]) r_pwm[i] <= 0; // volume >= counter, set PWM
+      else if(r_pwmcnt[5:0] == 0)                r_pwm[i] <= 1; // counter 0, reset PWM
 
-wire [22:0] w_rd_smp_l;
-wire [22:0] w_rd_smp_r;
-
-reg  [22:0] r_smp_l;
-reg  [22:0] r_smp_r;
-reg  [22:0] r_acc_l;
-reg  [22:0] r_acc_r;
-
-// FIFO storing 256 samples for left and right
-sample_fifo U_sample_fifo
-(
-  .reset(rst),
-  .clk(clk),
-  .wr_ena(cdac_r & cck),
-  .wr_smp_l(r_aud_l),
-  .wr_smp_r(r_aud_r),
-  .rd_smp_l(w_rd_smp_l[15:0]),
-  .rd_smp_r(w_rd_smp_r[15:0])
-);
-assign w_rd_smp_l[22:16] = {7{w_rd_smp_l[15]}};
-assign w_rd_smp_r[22:16] = {7{w_rd_smp_r[15]}};
-
-// 248-tap moving average filter
-// It has a gain of : 248/256 = 0.96875
-always @(posedge rst or posedge clk) begin
-  if (rst) begin
-    r_smp_l <= 23'd0;
-    r_smp_r <= 23'd0;
-    r_acc_l <= 23'd0;
-    r_acc_r <= 23'd0;
-  end
-  else if ((cdac_r) && (cck)) begin
-    // Delay current sample by one CCK cycle
-    r_smp_l <= { {7{r_aud_l[15]}}, r_aud_l };
-    r_smp_r <= { {7{r_aud_r[15]}}, r_aud_r };
-    // Add sample (n), subtract sample (n-248)
-    r_acc_l <= r_acc_l + r_smp_l - w_rd_smp_l;
-    r_acc_r <= r_acc_r + r_smp_r - w_rd_smp_r;
-  end
-end
-
-//////////////////////////////////////
-// Third order audio DACs at 85 MHz //
-//////////////////////////////////////
-
-// Left 3rd order delta/sigma modulator
-hq_dac U_hq_dac_left
-(
-  .reset(rst),
-  .clk(clk),
-  .clk_ena(1'b1),
-  .pcm_in(r_acc_l[22:3]),
-  .dac_out(aud_l)
-);
-
-// Right 3rd order delta/sigma modulator
-hq_dac U_hq_dac_right
-(
-  .reset(rst),
-  .clk(clk),
-  .clk_ena(1'b1),
-  .pcm_in(r_acc_r[22:3]),
-  .dac_out(aud_r)
-);
-
-endmodule
-
-module sample_fifo
-(
-  input         reset,
-  input         clk,
-  input         wr_ena,
-  input  [15:0] wr_smp_l,
-  input  [15:0] wr_smp_r,
-  output [15:0] rd_smp_l,
-  output [15:0] rd_smp_r
-);
-
-wire [31:0] w_wr_data;
-wire [31:0] w_rd_data;
-reg   [7:0] r_wr_addr;
-reg   [7:0] r_rd_addr;
-reg         r_rd_ena;
-
-assign w_wr_data[31:16] = wr_smp_l;
-assign w_wr_data[15:0]  = wr_smp_r;
-assign rd_smp_l = w_rd_data[31:16];
-assign rd_smp_r = w_rd_data[15:0];
-
-always @(posedge reset or posedge clk) begin
-  if (reset) begin
-    r_wr_addr <= 8'd0;
-    r_rd_addr <= 8'd8;
-    r_rd_ena  <= 1'b0;
-  end
-  else if (wr_ena) begin
-    r_wr_addr <= r_wr_addr + 8'd1;
-    r_rd_addr <= r_rd_addr + 8'd1;
-    if (r_rd_addr == 8'd255) r_rd_ena <= 1'b1;
-  end
-end
-
-`ifdef SIMULATION
-
-// Infered block RAM
-reg  [31:0] r_mem_blk [0:255];
-
-// Write side
-always@(posedge clk) begin
-  if (wr_ena)
-    r_mem_blk[r_wr_addr] <= w_wr_data;
-end
-
-reg  [31:0] r_q;
-
-// Read side
-always@(posedge clk) begin
-  if (r_rd_ena) begin
-    if (wr_ena) begin
-      r_q <= r_mem_blk[r_rd_addr];
+      // accumulate the channel pulse-density output
+      // high bit is captured the final carry out which we feed back for rounding
+      r_acc[i] <= r_acc[i][7:0] + { ~r_smpbuf[i][7], r_smpbuf[i][6:0] } + r_acc[i][8];
     end
-  end else begin
-    r_q <= 32'h0000_0000;
-  end
-end
 
-assign w_rd_data = r_q;
+    // Left is channels 1 and 2
+    r_mix_l <= {2{(r_acc[1][8] & r_pwm[1])}}
+             + {2{(r_acc[2][8] & r_pwm[2])}}
+             + r_mix_l[i][0];
 
-`else
-
-// Declared Altera block RAM
-altsyncram U_altsyncram_256x32
-(
-    // Write side
-    .clock0     (clk),
-    .wren_a     (wr_ena),
-    .address_a  (r_wr_addr),
-    .data_a     (w_wr_data),
-    // Read side
-    .aclr1      (reset),
-    .clock1     (clk),
-    .rden_b     (wr_ena & r_rd_ena),
-    .address_b  (r_rd_addr),
-    .q_b        (w_rd_data)
-);
-defparam 
-    U_altsyncram_256x32.operation_mode      = "DUAL_PORT",
-    U_altsyncram_256x32.width_a             = 32,
-    U_altsyncram_256x32.widthad_a           = 8,
-    U_altsyncram_256x32.width_b             = 32,
-    U_altsyncram_256x32.widthad_b           = 8,
-    U_altsyncram_256x32.outdata_aclr_b      = "CLEAR1",
-    U_altsyncram_256x32.outdata_reg_b       = "CLOCK1";
-
-`endif
-
-endmodule
-
-// This module is a third order delta/sigma modulator
-// It uses no multiply only shifts by 1, 2 or 13
-// There are only 7 adders used, it takes around 110 LUTs
-module hq_dac
-(
-  input         reset,
-  input         clk,
-  input         clk_ena,
-  input  [19:0] pcm_in,
-  output reg    dac_out
-);
-
-// ======================================
-// ============== Stage #1 ==============
-// ======================================
-wire [23:0] w_data_in_p0;
-wire [23:0] w_data_err_p0;
-wire [23:0] w_data_int_p0;
-reg  [23:0] r_data_fwd_p1;
-
-// PCM input extended to 24 bits
-assign w_data_in_p0  = { {4{pcm_in[19]}}, pcm_in };
-
-// Error between the input and the quantizer output
-assign w_data_err_p0 = w_data_in_p0 - w_data_qt_p2;
-
-// First integrator adder
-assign w_data_int_p0 = { {3{w_data_err_p0[23]}}, w_data_err_p0[22:2] } // Divide by 4
-                     + r_data_fwd_p1;
-
-// First integrator forward delay
-always @(posedge reset or posedge clk)
-  if (reset)
-    r_data_fwd_p1 <= 24'd0;
-  else if (clk_ena)
-    r_data_fwd_p1 <= w_data_int_p0;
-
-// ======================================
-// ============== Stage #2 ==============
-// ======================================
-wire [23:0] w_data_fb1_p1;
-wire [23:0] w_data_fb2_p1;
-wire [23:0] w_data_lpf_p1;
-reg  [23:0] r_data_lpf_p2;
-
-// Feedback from the quantizer output
-assign w_data_fb1_p1 = { {3{r_data_fwd_p1[23]}}, r_data_fwd_p1[22:2] } // Divide by 4
-                     - { {3{w_data_qt_p2[23]}},  w_data_qt_p2[22:2] }; // Divide by 4
-
-// Feedback from the third stage
-assign w_data_fb2_p1 = w_data_fb1_p1
-                     - { {14{r_data_fwd_p2[23]}}, r_data_fwd_p2[22:13] }; // Divide by 8192
-
-// Low pass filter
-assign w_data_lpf_p1 = w_data_fb2_p1 + r_data_lpf_p2;
-
-// Low pass filter feedback delay
-always @(posedge reset or posedge clk)
-  if (reset)
-    r_data_lpf_p2 <= 24'd0;
-  else if (clk_ena)
-    r_data_lpf_p2 <= w_data_lpf_p1;
-
-// ======================================
-// ============== Stage #3 ==============
-// ======================================
-wire [23:0] w_data_fb3_p1;
-wire [23:0] w_data_int_p1;
-reg  [23:0] r_data_fwd_p2;
-
-// Feedback from the quantizer output
-assign w_data_fb3_p1 = { {2{w_data_lpf_p1[23]}}, w_data_lpf_p1[22:1] } // Divide by 2
-                     - { {2{w_data_qt_p2[23]}},  w_data_qt_p2[22:1] }; // Divide by 2
-
-// Second integrator adder
-assign w_data_int_p1 = w_data_fb3_p1 + r_data_fwd_p2;
-
-// Second integrator forward delay
-always @(posedge reset or posedge clk)
-  if (reset)
-    r_data_fwd_p2 <= 24'd0;
-  else if (clk_ena)
-    r_data_fwd_p2 <= w_data_int_p1;
-
-// =====================================
-// ========== 1-bit quantizer ==========
-// =====================================
-wire [23:0] w_data_qt_p2;
-
-assign w_data_qt_p2 = (r_data_fwd_p2[23]) ? 24'hF00000 : 24'h100000;
-
-always @(posedge reset or posedge clk)
-  if (reset)
-    dac_out <= 1'b0;
-  else if (clk_ena)
-    dac_out <= ~r_data_fwd_p2[23];
-
-endmodule
+    // Right is channels 0 and 3
+    r_mix_r <= {2{(r_acc[0][8] & r_pwm[0])}}
+             + {2{(r_acc[3][8] & r_pwm[3])}}
+             + r_mix_r[i][0];    
+  end // if (!cck)
+end // always
 
 // This module is based on :                                                    //
 // Patent #4,780,844 from Commodore-Amiga Inc.
