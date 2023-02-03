@@ -1,0 +1,46 @@
+Running in Lattice mode
+
+
+Starting:    C:\lscc\iCEcube2.2020.12\synpbase\bin64\mbin\synbatch.exe
+Install:     C:\lscc\iCEcube2.2020.12\synpbase
+Hostname:    DESKTOP-QGIJL4H
+Date:        Sat Sep 10 13:43:44 2022
+Version:     L-2016.09L+ice40
+
+Arguments:   -product synplify_pro -batch denise_syn.prj
+ProductType: synplify_pro
+
+
+
+
+
+log file: "Z:\amiga_replacement_project\denise\ice\denise\denise_Implmnt\denise.srr"
+Running: denise_Implmnt in foreground
+
+Running denise_syn|denise_Implmnt
+
+Running: compile (Compile) on denise_syn|denise_Implmnt
+# Sat Sep 10 13:44:44 2022
+
+Running: compile_flow (Compile Process) on denise_syn|denise_Implmnt
+# Sat Sep 10 13:44:44 2022
+
+Running: compiler (Compile Input) on denise_syn|denise_Implmnt
+# Sat Sep 10 13:44:44 2022
+compiler exited with errors
+Job failed on: denise_syn|denise_Implmnt
+
+Job: "compiler" terminated with error status: 2
+See log file: "Z:\amiga_replacement_project\denise\ice\denise\denise_Implmnt\synlog\denise_compiler.srr"
+# Sat Sep 10 13:46:52 2022
+
+Return Code: 2
+Run Time:00h:02m:08s
+Complete: Compile Process on denise_syn|denise_Implmnt
+Complete: Compile on denise_syn|denise_Implmnt
+Complete: Logic Synthesis on denise_syn|denise_Implmnt
+
+exit status=2
+
+exit status=2
+

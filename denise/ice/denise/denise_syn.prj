@@ -1,0 +1,60 @@
+#-- Synopsys, Inc.
+#-- Project file Z:\amiga_replacement_project\denise\ice\denise\denise_syn.prj
+#project files
+add_file -verilog -lib work "../color_table.v"
+add_file -verilog -lib work "../denise.v"
+add_file -verilog -lib work "../denise_top.v"
+add_file -verilog -lib work "../mouse_inputs.v"
+add_file -verilog -lib work "../rga_decoder.v"
+
+#implementation: "denise_Implmnt"
+impl -add denise_Implmnt -type fpga
+
+#implementation attributes
+set_option -vlog_std v2001
+set_option -project_relative_includes 1
+
+#device options
+set_option -technology SBTiCE40
+set_option -part iCE40HX1K
+set_option -package CB132
+set_option -speed_grade 
+set_option -part_companion ""
+
+#compilation/mapping options
+
+# mapper_options
+set_option -frequency auto
+set_option -write_verilog 0
+set_option -write_vhdl 0
+
+# Silicon Blue iCE40
+set_option -maxfan 10000
+set_option -disable_io_insertion 0
+set_option -pipe 1
+set_option -retiming 0
+set_option -update_models_cp 0
+set_option -fixgatedclocks 2
+set_option -fixgeneratedclocks 0
+
+# NFilter
+set_option -popfeed 0
+set_option -constprop 0
+set_option -createhierarchy 0
+
+# sequential_optimization_options
+set_option -symbolic_fsm_compiler 1
+
+# Compiler Options
+set_option -compiler_compatible 0
+set_option -resource_sharing 1
+
+#automatic place and route (vendor) options
+set_option -write_apr_constraint 1
+
+#set result format/file last
+project -result_format "edif"
+project -result_file ./denise_Implmnt/denise.edf
+project -log_file "./denise_Implmnt/denise.srr"
+impl -active "denise_Implmnt"
+project -run synthesis -clean
