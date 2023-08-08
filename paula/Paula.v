@@ -342,33 +342,33 @@ end
 // Generate IPL_n[2:0] signal
 always@(posedge rst or posedge clk) begin
   if (rst) begin
-    ipl_n <= ~(3'd0);
+    ipl_n <= ~(3'b000);
   end
   // Rising edge of CDAC_n
   else if (cdac_r) begin
     if (r_INTENA[14]) begin
       // Master interrupt enable
       casez (r_INTENA[13:0] & r_INTREQ)
-        14'b1????????????? : ipl_n <= ~(3'd6); // EXTER  : level 6
-        14'b01???????????? : ipl_n <= ~(3'd5); // DSKSYN : level 5
-        14'b001??????????? : ipl_n <= ~(3'd5); // RBF    : level 5
-        14'b0001?????????? : ipl_n <= ~(3'd4); // AUD3   : level 4
-        14'b00001????????? : ipl_n <= ~(3'd4); // AUD2   : level 4
-        14'b000001???????? : ipl_n <= ~(3'd4); // AUD1   : level 4
-        14'b0000001??????? : ipl_n <= ~(3'd4); // AUD0   : level 4
-        14'b00000001?????? : ipl_n <= ~(3'd3); // BLIT   : level 3
-        14'b000000001????? : ipl_n <= ~(3'd3); // VERTB  : level 3
-        14'b0000000001???? : ipl_n <= ~(3'd3); // COPPER : level 3
-        14'b00000000001??? : ipl_n <= ~(3'd2); // PORTS  : level 2
-        14'b000000000001?? : ipl_n <= ~(3'd1); // SOFT   : level 1
-        14'b0000000000001? : ipl_n <= ~(3'd1); // DSKBLK : level 1
-        14'b00000000000001 : ipl_n <= ~(3'd1); // TBE    : level 1
-        default            : ipl_n <= ~(3'd0); // No interrupt
+        14'b1????????????? : ipl_n <= ~(3'bZZ0); // EXTER  : level 6
+        14'b01???????????? : ipl_n <= ~(3'bZ0Z); // DSKSYN : level 5
+        14'b001??????????? : ipl_n <= ~(3'bZ0Z); // RBF    : level 5
+        14'b0001?????????? : ipl_n <= ~(3'bZ00); // AUD3   : level 4
+        14'b00001????????? : ipl_n <= ~(3'bZ00); // AUD2   : level 4
+        14'b000001???????? : ipl_n <= ~(3'bZ00); // AUD1   : level 4
+        14'b0000001??????? : ipl_n <= ~(3'bZ00); // AUD0   : level 4
+        14'b00000001?????? : ipl_n <= ~(3'b0ZZ); // BLIT   : level 3
+        14'b000000001????? : ipl_n <= ~(3'b0ZZ); // VERTB  : level 3
+        14'b0000000001???? : ipl_n <= ~(3'b0ZZ); // COPPER : level 3
+        14'b00000000001??? : ipl_n <= ~(3'b0Z0); // PORTS  : level 2
+        14'b000000000001?? : ipl_n <= ~(3'b00Z); // SOFT   : level 1
+        14'b0000000000001? : ipl_n <= ~(3'b00Z); // DSKBLK : level 1
+        14'b00000000000001 : ipl_n <= ~(3'b00Z); // TBE    : level 1
+        default            : ipl_n <= ~(3'b000); // No interrupt
       endcase
     end
     else
       // Master interrupt disable
-      ipl_n <= ~(3'd0);
+      ipl_n <= ~(3'b000);
   end
 end
 
