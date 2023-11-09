@@ -6,7 +6,7 @@
 
 
 
-		A500/A2000 Gary Specification
+                A500/A2000 Gary Specification
 
 
 
@@ -16,261 +16,324 @@
 
 
 Revision History
-2022-May-16: 	RNC Corrected open-drain and tri-state nature of pins 41~43
-2022-May-17:	Added description of Pin 16 
-		Added pinout diagram
-		Added timing diagram from Agnus
+2022-May-16:    RNC Corrected open-drain and tri-state nature of pins 41~43
+2022-May-17:    Added description of Pin 16 
+                Added pinout diagram
+                Added timing diagram from Agnus
+2023-Nov-8:     Updated naming to match final Commodore naming scheme and
+                    publically available schematics.
+                Corrected some missing open-collector outputs
+                Added description for Floppy pins
+                Moved timing diagrams to Appendix A
+                Added Amiga A2000 PAL Equations to Appendix B
+                Fixed up memory banks as per real internal logic
 
 1. DEFINITION
 
   1.1 GENERAL DESCRIPTION
-	
-      This IC contains miscellaneous control circuitry which provides
-      interface and control for systems using the Amiga custom chip set and a
-      68000 micro-procesor. 
+
+        Gary is a custom gate array IC using in the A500 and A2000, collectively referred to as the A2500 henceforth. It is packaged in a 48-pin DIP chip whose pinout is shown below. Gary provides many different 'glue' functions for the system. These functions are:
+
+        - Address decoding for Kickstart ROM
+        - Address decoding for Chip RAM
+        - Address decoding for chip registers
+        - Address decoding and timing for 8520s (CIAs)
+        - Address decoding and timing for Real Time Clock (RTC)
+        - Monitoring of the bus for timeout conditions
+        - System RESET logic
 
   1.2 PIN CONFIGURATION 
 
                .--------..---------.
-      VSS    --| 1              48 |-- VDD
-      NVPA   -o| 2              47 |-- MTRXD
-      NCDR   -o| 3              46 |-- MTR0D
-      NCDW   -o| 4              45 |-- DKWDB
-      NKRES  -o| 5              44 |-- DKWEB
-      VDD    --| 6              43 |o- NDTACK
-      NMTR   -o| 7              42 |o- NHALT
-      NDKWD  -o| 8              41 |o- NRESET
-      NDKWE  --| 9              40 |-- N/C
-      NLDS   -o| 10             39 |-- A23
-      NUDS   -o| 11             38 |-- A22
-      PRW    -o| 12  CSG 5719   37 |-- A21
-      NAS    -o| 13   "GARY"    36 |-- A20
-      NBGACK -o| 14             35 |-- A19
-      NDBR   -o| 15             34 |-- A18
-      NSEL0  -o| 16             33 |-- A17
-      VDD    --| 17             32 |o- NEXP
-      NRGAE  -o| 18             31 |-- XRDY
-      NBLS   -o| 19             30 |-- OVL
-      NRAME  -o| 20             29 |o- NOVR
-      NROME  -o| 21             28 |-- C1
-      NRTCR  -o| 22             27 |-- C3
-      NRTCW  -o| 23             26 |-- NCDAC
-      VSS    --| 24             25 |o- C4
+         GND --| 1              48 |-- Vcc
+        /VPA --| 2              47 |-- MTRX
+        /OEL --| 3              46 |-- MTRON
+        /OEB --| 4              45 |-- DKWDB
+       /KRES --| 5              44 |-- DKWEB
+         Vcc --| 6              43 |-- /DTACK
+        /MTR --| 7              42 |-- /HLT
+       /DKWD --| 8              41 |-- /RST
+       /DKWE --| 9              40 |-- GND
+        /LDS --| 10             39 |-- A23
+        /UDS --| 11             38 |-- A22
+         R/W --| 12  CSG 5719   37 |-- A21
+         /AS --| 13   "GARY"    36 |-- A20
+      /BGACK --| 14             35 |-- A19
+       /BLIT --| 15             34 |-- A18
+        /SEL --| 16             33 |-- A17
+         Vcc --| 17             32 |-- /EXRAM
+      /REGEN --| 18             31 |-- XRDY
+      /BLISS --| 19             30 |-- OVL
+      /RAMEN --| 20             29 |-- /OVR
+      /ROMEN --| 21             28 |-- CCK
+      /CLKRD --| 22             27 |-- CCKQ
+      /CLKWR --| 23             26 |-- /CDAC
+         GND --| 24             25 |-- /LATCH
                '-------------------'
-
+
 2. FUNCTIONAL DESCRIPTION
     
   2.1 PIN DESCRIPTION
- 				ACTV
-      PIN	NAME	TYPE	LVL	DESCRIPTION
-      ---	----	----	----	--------------------------
-       1	VSS	PWR		Common ground supply
-       2	NVPA	OUT	LO	Valid peripheral address 
-       3	NCDR	OUT	LO	Enable video bus read buffers
-       4	NCDW	OUT	LO	Enable video bus output buffers
-       5	NKRES	IN	LO	Power-up/Keybd Reset 
-       6	VDD	PWR		Common 5v supply
-       7	NMTR	IN	LO	Disk motor enable 
-       8	NDKWD	IN	LO	Disk write data
-       9	NDKWE	IN	HI	Disk write enable
-      10	NLDS	IN	LO	68000 lower byte data strobe
-      11	NUDS	IN	LO	68000 upper byte data strobe
-      12	PRW	IN	LO	68000 write enable
-      13	NAS	IN	LO	68000 Adress strobe
-      14	NBGACK	IN	LO	Bus grant acknowledge 
-      15	NDBR	IN	LO	DMA bus request 
-      16	NSEL0	IN	LO	Disk motor select
-      17	VDD	PWR		Common 5v supply
-      18	NRGAE	OUT	LO	Amiga chip register address decode
-      19	NBLS	OUT	LO	Blitter slowdown
-      20	NRAME	OUT	LO	Video RAM address decode
-      21	NROME	OUT	LO	On-board ROM address decode
-      22	NRTCR	OUT	LO	Real time clock read enable
-      23	NRTCW	OUT	LO	Real time clock write enable
-      24	VSS	PWR		Common ground supply
-      25	C4	OUT	LO	Enable video bus read latch
-      26	NCDAC	IN	CLK	7.14Mhz clk (high while C3 changes)
-      27	C3	IN	CLK	3.57Mhz clk (90 deg lag of C1)
-      28	C1	IN	CLK	3.57Mhz clk 
-      29	NOVR	IN	LO	Override (internal decoding and DTACK)
-      30	OVL	IN	HI	Overlay (ROM to address 0)
-      31	XRDY	IN	HI	External ready
-      32	NEXP	IN	LO	Expansion RAM (present)
-      33	A17	IN	HI	68000 CPU Address
-      34	A18	IN	HI	68000 CPU Address
-      35	A19	IN	HI	68000 CPU Address
-      36	A20	IN	HI	68000 CPU Address
-      37	A21	IN	HI	68000 CPU Address
-      38	A22	IN	HI	68000 CPU Address
-      39	A23	IN	HI	68000 CPU Address
-      40	N/C			No connect
-      41	NRESET	OUT OD	LO	68000 reset (open-drain)
-      42	NHALT	OUT OD	LO	68000 halt (open-drain)
-      43	NDTACK	OUT TS	LO	Data transfer acknowledge (tri-state)
-      44	DKWEB	OUT	HI	Disk write enable buffered
-      45	DKWDB	OUT	HI	Disk write data buffered
-      46	MTR0D	OUT	HI	Latched disk motor on NSEL0
-      47	MTRXD	OUT	HI	Buffered NMTR 
-      48	VDD	PWR		Common 5v supply
-
+
+        PIN     NAME    TYPE    DESCRIPTION
+        ---     ----    ----    --------------------------
+        1       GND     PWR     Common ground supply
+        2       /VPA    OUT     Valid peripheral address 
+        3       /OEL    OUT OC  Enable video bus read buffers
+        4       /OEB    OUT OC  Enable video bus output buffers
+        5       /KRES   IN      Power-up/Keybd Reset 
+        6       Vcc     PWR     Common 5V supply
+        7       /MTR    IN      Disk motor enable 
+        8       /DKWD   IN      Disk write data
+        9       /DKWE   IN      Disk write enable
+        10      /LDS    IN      68000 lower byte data strobe
+        11      /UDS    IN      68000 upper byte data strobe
+        12      R/W     IN      68000 write enable
+        13      /AS     IN      68000 Adress strobe
+        14      /BGACK  IN      Bus grant acknowledge 
+        15      /BLIT   IN      DMA bus request 
+        16      /SEL    IN      Disk motor select
+        17      Vcc     PWR     Common 5V supply
+        18      /REGEN  OUT     Amiga chip register address decode
+        19      /BLISS  OUT     Blitter slowdown
+        20      /RAMEN  OUT     Video RAM address decode
+        21      /ROMEN  OUT     On-board ROM address decode
+        22      /CLKRD  OUT     Real time clock read enable
+        23      /CLKWR  OUT     Real time clock write enable
+        24      GND     PWR     Common ground supply
+        25      /LATCH  OUT     Enable video bus read latch (C4)
+        26      /CDAC   IN      7.14Mhz Clock (high while CCKQ changes)
+        27      CCKQ    IN      3.57Mhz Colour Clock Quadrature (C1)
+        28      CCK     IN      3.57Mhz Colour Clock (C3)
+        29      /OVR    IN      Override (internal decoding and DTACK)
+        30      OVL     IN      Overlay (ROM to address 0)
+        31      XRDY    IN      External ready
+        32      /EXRAM  IN      Expansion RAM (present)
+        33      A17     IN      68000 CPU Address
+        34      A18     IN      68000 CPU Address
+        35      A19     IN      68000 CPU Address
+        36      A20     IN      68000 CPU Address
+        37      A21     IN      68000 CPU Address
+        38      A22     IN      68000 CPU Address
+        39      A23     IN      68000 CPU Address
+        40      GND     PWR     Internally not connected
+        41      /RST    OUT OC  68000 reset
+        42      /HLT    OUT OC  68000 halt
+        43      /DTACK  OUT TS  Data transfer acknowledge (tri-state)
+        44      DKWEB   OUT OC  Disk write enable buffered
+        45      DKWDB   OUT OC  Disk write data buffered
+        46      MTRON   OUT OC  Latched disk motor on /SEL 
+        47      MTRX    OUT OC  Buffered /MTR
+        48      Vcc     PWR     Common 5V supply
+
+                            OC Open Collector
+                            TS Tri-Stated
+
   2.1 OPERATION DESCRIPTION
 
-      Address lines A17-A23 are connected to the processor address bus and are
-      used to generate the various device decodes. 
+    2.1.1 UNSUPPORTED FEATURES
 
-      Expansion RAM signal is externally pulled up.  The expansion RAM card
-      grounds this line.  This signal is used in the generation of NRAME. 
+        Gary does not manage either the 68000's Function Codes (thus all memory
+        is available in both user and supervisor modes, to both program and
+        data fetches) nor any of the bus arbitration (which is handled by
+        separate logic). Additionally, the Amiga does not use IACKs or extended
+        exceptions, so no interrupt handling is present on Gary.
 
-      68000 bus timing: 
-      
-       _   _   _   _   _   _   _   _   _   _   _   _   _   _   _   _
-      / \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_/ \_    28MHz
-      ___:       :       :_______________:       :       :____________         
-         \_______________/       :       \_______________/                C1 (CCK)
-      ___________:               :_______________:                ____ 
-                 \_______________/               \_______________/        C3 (CCKQ)
-      ____        ________        ________        ________        ____
-         \\______//      \\______//      \\______//      \\______//       7M (CPU)
-              ________        ________        ________        _______     
-      \______//      \\______//      \\______//      \\______//      \    7M (CDAC)
-	  
-                         |-------------------------------| 		  Cycles of Relevance
-      ___________                                 ____________________
-          \\\\\\\\_______________________________////////                 NAS, NRGE, NRAME
-             2       3       4       5       6       7       0       1    CPU State
-      ____________________________             _______________________
-                           \\\\\\\\___________////////                    PRW, NUDS, NLDS
+    2.1.2 ADDRESSES
+
+        Address lines A23~A17 are connected to the processor address bus and are
+        used to generate the various device decodes.
+
+    2.1.3 ROM
+
+        The onboard ROMs are selected in the address range $F80000 to $FFFFFF.
+        The ROMs are also selected in the range from $000000 to $1FFFFF when
+        the overlay input signal (OVL) is true (this allows the RESET
+        instructions to be contained in the ROMs).
+
+        Access to the onboard ROMs is zero-wait.
+
+    2.1.4 CHIP RAM
+
+        Chip RAM is selected in the address range from $000000 to $1FFFFF. When
+        the OVL input is true (high), Chip RAM is not selected for these
+        addresses and ROM appears here instead. The CPU cucle is terminated
+        using DTACK which also serves to synchronize the 68000 to the Video DMA
+        timing.
+
+        Access to the onboard Chip RAM is zero-wait when not being blocked by
+        Agnus.
+
+    2.1.5 8520s
+
+        There are two 8520 CIA ICs on the mainboard, referred to here as CIA0
+        and CIA1. CIA0 is selected in the address range from $BFE000 to
+        $BFEFFF. CIA1 is selected from $BFD000 to $BFDFFF. Both CIAs are only
+        8 bits wide, but respond as 16 bits for compatibility. In order to read
+        the 8 bits, CIA0 must be read at an odd word address and CIA1 must be
+        read at an even word address.
+
+        The CIAs operate on the E CLK which is generated by the 68000 at a
+        ratio of 1/10th the processor clock. Gary is only responsible for
+        generating the VPA signal and does not induce any wait states.
+
+    2.1.6 REAL TIME CLOCK (RTC)
+    
+        The RTC is selected in the range from $DC0000 to $DCFFFF. It is
+        actually only 4 bits but respondsas 16-bits fo compatibility. In order
+        to read the 4 bits, the RTC must be read at an odd word address.
+
+        Gary will add three additional wait states when accessing the RTC.
+
+    2.1.7 EXPANSION RAM
+
+        Expansion RAM signal is externally pulled up.  The expansion RAM card
+        grounds this line.  This signal is used in the generation of /RAMEN. 
         
-      C1 and C3 transition when 28MHz Clock is low
-      7M CPU clock is derived from C1 and C3 (not vice-versa)
-      CDAC clock is derived from C2 and C4 (not vice-versa) 
-      7M CPU and CDAC clocks may be delayed slightly
-      
-      NAS (Not Address Strobe) indicates the start of a bus cycle and remains
-      asserted for the duration of the cycle.  Processor addresses (A1:23),
-      status FC0:2 and PRW are valid while NAS is asserted. 
+  2.2 SIGNAL DSCRIPTION
 
-      NUDS/NLDS (Not Upper/Lower Data Strobes) indicated data is valid during
-      a write or enable read data to drive the data bus.  NUDS indicates valid
-      data on D7:15 and NLDS indicates valid data on D0:7. 
+        /AS (Address Strobe) indicates the start of a bus cycle and remains
+        asserted for the duration of the cycle.  Processor addresses (A1:23),
+        status FC0:2 and R/W are valid while /AS is asserted. 
 
-      PRW (Processor Read/Write) indicates the direction of data buss
-      transfer.  PRW =0 is a processor write. 
+        /xDS (Upper/Lower Data Strobes) indicated data is valid during a
+        write or enable read data to drive the data bus.  /UDS indicates valid
+        data on D7:15 and /LDS indicates valid data on D0:7. 
 
-      NDTACK (Not Data Transfer ACKnowledge) is an open collector or tri-state
-      output drives the CPU NDTACK input.  The 68000 requires NDTACK=0 to
-      complete either a read or write cycle.  This signal sets up to the end
-      of processor state S4.  If NDTACK=0, the cycle will complete normally. 
-      If NDTACK=1, the processor will add wait states until NDTACK=0 before
-      advancing to S5 and then completing the cycle.  If NDTACK is never
-      asserted (=0), the processor will hang up. This circuit provides NDTACK
-      generation for all internal memory accesses and is available for
-      external device use (via XRDY) if desired.  If the external device
-      desires to control NDTACK directly, the NOVR signal can be asserted
-      which tri-states (or forces one in the case of open collector) the
-      NDTACK output. 
+        R/W (Processor Read/Write) indicates the direction of data buss
+        transfer.  R/W =0 is a processor write. 
 
-      XRDY (eXternal ReaDY) input is used by external devices to control the
-      internal NDTACK generation in the case where NDTACK is needed to cause
-      processor wait states. If XRDY is not asserted by an external device,
-      the internal circuit will generate an NDTACK which does not generate any
-      processor wait states.  Since XRDY can only de-assert NDTACK, this
-      circuit will prevent the system from hanging up in the event that
-      non-existant memory locations are accessed. 
+        /DTACK (Data Transfer ACKnowledge) is an open collector or tri-state
+        output drives the CPU /DTACK input.  The 68000 requires /DTACK=0 to
+        complete either a read or write cycle.  This signal sets up to the end
+        of processor state S4.  If /DTACK=0, the cycle will complete normally. 
+        If /DTACK=1, the processor will add wait states until /DTACK=0 before
+        advancing to S5 and then completing the cycle.  If /DTACK is never
+        asserted (=0), the processor will hang up. This circuit provides /DTACK
+        generation for all internal memory accesses and is available for
+        external device use (via XRDY) if desired.  If the external device
+        desires to control /DTACK directly, the /OVR signal can be asserted
+        which tri-states (or forces one in the case of open collector) the
+        /DTACK output. 
 
-      (include Welland timing diagram #3) 
+        XRDY (eXternal ReaDY) input is used by external devices to control the
+        internal /DTACK generation in the case where /DTACK is needed to cause
+        processor wait states. If XRDY is not asserted by an external device,
+        the internal circuit will generate an /DTACK which does not generate any
+        processor wait states.  Since XRDY can only de-assert /DTACK, this
+        circuit will prevent the system from hanging up in the event that
+        non-existant memory locations are accessed. 
 
-      NOVR (Not OVeRide) input directly disables the internal generation of
-      NDTACK and internal device selects.  This pin allows external devices to
-      map themselves in place of existing devices (such as ROM).  In this
-      case, the external device must assert it's own NDTACK.  The timing of
-      this circuit IS NOR RELIABLE FOR REPLACING VIDEO RAM (NRAME) OR VIDEO
-      REGISTERS (NROME). 
+        See Appendix A for timing diagrams.
 
-      OVL (OVerLay) input causes ROM to be accessed at memory location 0. 
-      This signal is typically driven by a port line so that ROM is mapped to
-      the memory 0 at RESET time. 
+        /OVR (OVeRide) input directly disables the internal generation of
+        /DTACK and internal device selects.  This pin allows external devices to
+        map themselves in place of existing devices (such as ROM).  In this
+        case, the external device must assert it's own /DTACK.  The timing of
+        this circuit IS NOR RELIABLE FOR REPLACING VIDEO RAM (/RAMEN) OR VIDEO
+        REGISTERS (/ROMEN).
 
-      NDBR (Not Data Bus Request) input indicates that the Amiga custom chips
-      are performing a video bus DMA.  The circuit delays generation of
-      NDTACK, thereby delaying the CPU if it attempts to access the video bus
-      address range while NDBR is asserted. 
-
-      NBLS (Not BLitter Slowdown) output drives the custom chip blitter
-      slowdown input.  When the CPU address in BANK6 area, NBLS is asserted. 
+        OVL (OVerLay) input causes ROM to be accessed at memory location 0. 
+        This signal is typically driven by a port line so that ROM is mapped to
+        the memory 0 at RST time. 
 
-      NBGACK (Not Bus Grant ACKnowledge) input indicates that an external DMA
-      devices has taken control of the processor busses. 
+        /BLIT(Data Bus Request) input indicates that the Amiga custom chips
+        are performing a video bus DMA.  The circuit delays generation of
+        /DTACK, thereby delaying the CPU if it attempts to access the video bus
+        address range while /BLITis asserted. 
+        
+        /BLISS (BLitter Slowdown) output drives the custom chip blitter
+        slowdown input.  When the CPU address in BANK6 area, /BLISS is asserted. 
 
-      NRAME (Not RAM Enable) output indicates that the CPU is accessing video
-      bus RAM (this includes expansion RAM). 
+        /BGACK (Bus Grant ACKnowledge) input indicates that an external DMA
+        devices has taken control of the processor busses. 
 
-      NRGAE (Not RGA Enable) output indicates that the CPU is accessing Amiga
-      custom chip register space.; 
+        /RAMEN (RAM Enable) output indicates that the CPU is accessing video
+        bus RAM (this includes expansion RAM). 
 
-      NCDR (Not C Data Read) output enables the output buffers of the video
-      bus data latch to drive the CPU data bus. 
+        /REGEN (RGA Enable) output indicates that the CPU is accessing Amiga
+        custom chip register space.; 
 
-      NCDW (Not C Data Write) output enables the video data buffers to drive
-      the video data bus. 
+        /OEL (Chip->68000 Buffer) output enables the output buffers of the video
+        bus data latch to drive the CPU data bus. 
 
-      C4 (Clock 4) output is used to latch data on the video data bus. It is
-      regenerating the original Amiga 1000 C4 that is absent in the 500/2000.
+        /OEB (68000->Chip Buffer) output enables the video data buffers to drive
+        the video data bus. 
 
-      NVPA (Not Valid Peripheral Address) output indicates that the CPU is
-      accessing an 6800 type peripheral (such as the 8520) and causes the CPU
-      to perform a 6800 compatible cycle. 
+        /LATCH (Clock 4) output is used to latch data on the video data bus. It
+        is regenerating the original Amiga 1000 C4 that is absent.
 
-      NROME (Not ROM Enable) output is the chip select for the internal 2Mb
-      ROM. 
+        /VPA (Valid Peripheral Address) output indicates that the CPU is
+        accessing an 6800 type peripheral (such as the 8520) and causes the CPU
+        to perform a 6800 compatible cycle. 
 
-      NRTCR/NRTCW (Not Real Time Clock Read/Write) outputs are the read/write
-      enables used for data transfers to and from the the real time clock
-      circuit . 
+        /ROMEN (ROM Enable) output is the chip select for the internal 2Mb
+        ROM. 
 
-      Address Decoding - The address decoding generates internal memory bank
-      signals. 
+        /CLKRD /CLKWR (Real Time Clock Read/Write) outputs are the read/write
+        enables used for data transfers to and from the the real time clock
+        circuit.  RTC clock transfers all have an additional three wait states
+        inserted before /DTACK.
 
-      Address Range		Bank
-      000000-1FFFFF		BANK0
-      200000-9FFFFF		BANK14 (1 through 4) 
-      A00000-BFFFFF		BANK5
-      C00000-DFFFFF		BANK6
-      E00000-FFFFFF		BANK7
-      C00000-C7FFFF		ERAM (expansion RAM, qualified by GO)
-      D80000-DB0000		NNAC (non auto config for RTC)
-      E00000-E7FFFF		NROM
-      FB0000-FFFFFF		NROM
-      000000-1FFFFF		NROM if OVR asserted
+        MTRON is the signal that tells the floppy motor to turn on. It it the
+        /MTR input latched by the /SEL  input. MTRON is gauranteed negated when
+        RST is asserted.
 
-      QUAL decode qualification is true only when NAS is asserted and both
-      NDTACK and NOVR are de-asserted.  Used to qualify RAM, RGA and ROM
-      selection. 
+        MTRX is the signal that tells the floppy motor what to do. It follows
+        the /MTR input except during reset when it's gauranteed negated.
 
-      ROME is asserted when NROM is decoded and: 
+        DKWDB is a buffered version of the /DKWD signal.
 
-      1. Bus cycle is a read (PRW=1)
-      2. NAS is asserted
-      3. OVR is de-asserted
+        DKWEB follows DKWE except it is negated during reset.
 
-      The NDTACK circuit has to generate NDTACK for all onboard devices and
-      also for expansion space (to avoid system hangs). ROM, RAM and custom
-      chip registers are special because it is necessary to synchronize them
-      top a specific phase of the C1,C3 clocks per the following diagram: 
-
+  2.3 ADDRESS DECODING
+
+        Gary splits the Amiga memory into eight 2MB sections by selecting the
+        high three bits of the address. These are then subdivided for BANK 5
+        (8-bit CIA chips) and BANK 6 (16-bit chips). Addresses not decoded in
+        the table below should be regarded as reserved and are not used on the
+        Amiga 500/2000.
+
+        Bits        Address Range           Bank
+        ----        -------------           ----
+        b000        0xxxxx-1xxxxx           Chip RAM (RAMEN if OVL=L) or
+                                            Kickstart (ROMEN if OVL=H)
+
+        b001        2xxxxx-3xxxxx           Zorro Bank 1 |
+        b010        4xxxxx-4xxxxx           Zorro Bank 2 |_ 8MB Expansion
+        b011        6xxxxx-7xxxxx           Zorro Bank 3 |
+        b100        8xxxxx-9xxxxx           Zorro Bank 4 |
+
+        b101        Axxxxx-Bxxxxx
+        b---1_111x  BExxxx-BFxxxx           CIA Chip Access (VPA)
+
+        b110        Cxxxxx-Dxxxxx
+        b---0_xxxx  C0xxxx-CFxxxx           Ranger RAM (1MB)
+        b---1_0xxx  D0xxxx-D7xxxx           Ranger RAM (512KB)
+        b---1_1100  DCxxxx                  Real Time Clock (RTCWD/RD)
+        b---1_1111  DFxxxx                  Custom Chip Access (RGAEN)
+
+        b111        Exxxxx-Fxxxxx           Kickstart (ROMEN if OVL=L)
+
+        The /DTACK circuit has to generate /DTACK for all onboard devices and
+        also for expansion space (to avoid system hangs). ROM, RAM and custom
+        chip registers are special because it is necessary to synchronize them
+        top a specific phase of the CCK CCKQ clocks.
+
+        See Appendix A for Timing Diagrams.
 
 3. ELECTRICAL REQUIREMENTS
 
   3.1 ABSOLUTE MAXIMUM RATINGS 
 
-      Stresses above those listed may cause permanent damage to the
-      circuit.  Functional operation of the device at these or any 
-      conditions other than those indicated in the operating conditions
-      of this specification is not implied.  Exposure to the maximum
-      ratings for extended periods may adversely affect device reliability.
+        Stresses above those listed may cause permanent damage to the
+        circuit.  Functional operation of the device at these or any 
+        conditions other than those indicated in the operating conditions
+        of this specification is not implied.  Exposure to the maximum
+        ratings for extended periods may adversely affect device reliability.
 
- 	 Characteristic                     Min    Max    Units
-	 --------------                    -----  -----   -----
+          Characteristic                     Min    Max    Units
+         --------------                    -----  -----   -----
     3.1.1 ambient temperature under bias    -25   +125     °C
     3.1.2 storage temperature               -65   +150     °C
     3.1.3 applied supply voltage            -0.5  +7.0    volts
@@ -280,85 +343,298 @@ Revision History
 
   3.2 OPERATING CONDITIONS 
 
-      All electrical characteristics are specified over the entire 
-      range of the operating conditions unless specifically noted.  
-      All voltages are referenced to Vss = 0.0V. 
+        All electrical characteristics are specified over the entire 
+        range of the operating conditions unless specifically noted.  
+        All voltages are referenced to Vss = 0.0V. 
 
-	  Condition                    Min    Max    Units
-	  ------------------------    -----  -----   -----
+          Condition                    Min    Max    Units
+          ------------------------    -----  -----   -----
     3.2.1 Supply voltage (Vcc)         4.75   5.25   volts
     3.2.2 Free air temperature          0      70     oC
-    3.2.3 C1/C3 period                 270    280     ns
-    3.2.4 C1/C3 +/- pulse width	       130    150     ns
-    3.2.5 C1-C3 quadrature delay        65     75     ns
-    3.2.6 NCDAC +/- pulse width	        65     75     ns
-    3.2.7 NCDAC+ to C3 +/- delay        30     40     ns
+    3.2.3 CCK/CCKQ period              270    280     ns
+    3.2.4 CCK/CCKQ +/- pulse width     130    150     ns
+    3.2.5 CCK-CCKQ quadrature delay     65     75     ns
+    3.2.6 /CDAC +/- pulse width         65     75     ns
+    3.2.7 /CDAC+ to CCKQ +/- delay      30     40     ns
 
   3.3 INTERFACE CHARACTERISTICS 
 
           Characteristic     Symbol   Min  Max    Units     Conditions
-	  ------------------ ------   ---  ---    -----  ---------------
+          ------------------ ------   ---  ---    -----  ---------------
     3.3.1 Input high level    Vih     2.0 Vcc+0.5 volts   
     3.3.2 Input low  level    Vil    -0.5  0.8    volts
+
     3.3.3 Output high level   Voh     2.4   -     volts   Ioh = -400ua
     3.3.4 Output low  level   Vol     -    0.4    volts   Iol =  3.2ma
+    
     3.3.5 Input  leakage      Iin    -10   10     uamps   0.0v<Vin<Vcc
     3.3.7 Supply current      Icc     -    25     mamps   Outputs open, 
                                                           clocks operating
-							  Vcc = 5.25V
-	   
+                                                          Vcc = 5.25V
+        
   3.4 SWITCHING CHARACTERISTICS 
 
-      Switching characteristics are specified for input waveforms 
-      switching between 0.4V low level and 2.4V high level with 10%-90%
-      rise and fall times of 10ns.  Outputs are loaded at the rated  
-      interface conditions with 130pf total capacitive load (including  
-      fixturing).  All time measurements of driven signals are referenced 
-      to 1.5V on inputs and outputs.  See figure (xx) for timing relationships.
+        Switching characteristics are specified for input waveforms 
+        switching between 0.4V low level and 2.4V high level with 10%-90%
+        rise and fall times of 10ns.  Outputs are loaded at the rated  
+        interface conditions with 130pf total capacitive load (including  
+        fixturing).  All time measurements of driven signals are referenced 
+        to 1.5V on inputs and outputs.  See figure (xx) for timing relationships.
 
-             Output          Input(s)      Delay Limit
-            --------       ------------  -------------------
-      3.4.1  NDTACK-       AS-,C3+       45ns max
-      3.4.2  NDTACK off(1) XRDY-         35ns max (w/o rise time)
-      3.4.3  NOVR-                       20ns max (w/o rise time)
-      3.4.4  NROME         AS-           50ns max (2)
-      3.4.5  NRAME         Addr,NEXP,C3- 60ns max
-      3.4.6  NRTCR         AS            50ns max (2)
-      3.4.7  NRTCW+        UDS/LDS+      30ns max
-      3.4.8  NCDR-         C1+           50ns max (2)
-      3.4.9      +         UDS/LDS+      50ns max (2)
-      3.4.10 NCDW-         PRW-          50ns max (2)
-      3.4.11     +         C1+           50ns max (2)
-      3.4.12 C4-           NCDAC-        25ns max
-      3.4.13   +           NCDAC-        50ns max (2)
-      3.4.14 NVPA          AS            50ns max (2)
-      3.4.15 HALT          RESET         50ns max (2)
-      3.4.16 DKWEB         DKWE          50ns max (2)
-      3.4.17 MTR0D         NSEL0         50ns max (2)
-      3.4.18 MTRXD         NMTR          50ns max (2)
-      3.4.19 DKWDB         NDKWD         50ns max (2)
-      3.4.20 NBLS-         C1+           50ns max (2)
-      3.4.21 NBLS+         C3-           50ns max (2)
+             Output        Input(s)           Delay Limit
+             --------      ------------       -------------------
+      3.4.1  /DTACK-       AS-,CCKQ+          45ns max
+      3.4.2  /DTACK off(1) XRDY-              35ns max (w/o rise time)
 
-      (1) - NTDACK is a potential system problem in the case where NOVR is
-	    activited after AS- (S2) has already asserted NTDACK.  In this
-	    event, NDTACK can not be guaranteed to be pulled high before S5
-	    because of the pullup resistance and node capacitance.  This is
-	    the case with either Toshiba gate array or 5719. 
+      3.4.3  /OVR-                            20ns max (w/o rise time)
+
+      3.4.4  /ROMEN        AS-                50ns max (2)
+
+      3.4.5  /RAMEN        Addr,/EXRAM,CCKQ-  60ns max
+
+      3.4.6  /CLKRD        AS                 50ns max (2)
+      3.4.7  /CLKWR+       UDS/LDS+           30ns max
+
+      3.4.8  /OEL-         CCK+               50ns max (2)
+      3.4.9  /OEL+         UDS/LDS+           50ns max (2)
+
+      3.4.10 /OEB-         R/W-               50ns max (2)
+      3.4.11 /OEB+         CCK+               50ns max (2)
+
+      3.4.12 /LATCH-       /CDAC-             25ns max
+      3.4.13 /LATCH+       /CDAC-             50ns max (2)
+
+      3.4.14 /VPA          AS                 50ns max (2)
+
+      3.4.15 HLT           RST                50ns max (2)
+
+      3.4.16 DKWEB         DKWE               50ns max (2)
+      3.4.17 MTRON         /SEL               50ns max (2)
+      3.4.18 MTRX          /MTR               50ns max (2)
+      3.4.19 DKWDB         /DKWD              50ns max (2)
+
+      3.4.20 /BLISS-       CCK+               50ns max (2)
+      3.4.21 /BLISS+       CCKQ-              50ns max (2)
+
+      (1) - /DTACK is a potential system problem in the case where /OVR is
+            activited after AS- (S2) has already asserted /TDACK.  In this
+            event, /DTACK can not be guaranteed to be pulled high before S5
+            because of the pullup resistance and node capacitance.  This is
+            the case with either Toshiba gate array or 5719. 
 
       (2) - Many signals are not critical timings.  50ns was selected as a
-	    convenient, non-critical value. 
-	         	
+            convenient, non-critical value. 
+                         
 4. MECHANICAL REQUIREMENTS
 
   4.1 Marking
-	  
-      Parts shall be marked with Commodore part number, manufacturers
-      identification and EIA data code.  Pin 1 shall be identified.
+          
+        Parts shall be marked with Commodore part number, manufacturers
+        identification and EIA data code.  Pin 1 shall be identified.
 
   4.2 PACKAGING
 
-      The circuit shall be packaged in a standard plastic or ceramic 
-      48 pin dip with 0.100" pin to pin spacing and 0.600" pin row 
-      to pin row spacing.
+        The circuit shall be packaged in a standard plastic or ceramic 
+        48 pin dip with 0.100" pin to pin spacing and 0.600" pin row 
+        to pin row spacing.
 
+APPENDICES
+
+APPENDIX A. TIMING DIAGRAMS
+
+  A.1 AMIGA CLOCKS
+                   140ns
+                 |<----->|
+              ___     ___     ___     ___     ___     ___     ___     ___     _
+         C7M |   |___|   |___|   |___|   |___|   |___|   |___|   |___|   |___| 
+                         :   :   :   :   :
+       STATE   0   1   2 : 3 : 4 : 5 : 6 : 7   0   1   2   3   4   5   6   7   
+                ___     ___  :  ___  :  ___     ___     ___     ___     ___
+        CDAC __|   |___| : |___| : |___| : |___|   |___|   |___|   |___|   |___
+                         :   :   :   :   :
+                         :<------------->: CYCLE OF RELEVANCE
+             ____        :_______:   :   :_______         _______         _____
+         CCK     |_______|   :   |_______|       |_______|       |_______|
+                         :   :   :   :   :
+              _______    :   :_______:   :    _______         _______         _
+        CCKQ |       |_______|   :   |_______|       |_______|       |_______|
+
+  A.2 6800 BUS TIMING
+             ____________________________
+         /AS |||||||||||||||||||||||||||||________________________________________________________|
+                                         '-- Must assert 3 clks before E CLK high
+             ____                                                 ________________________________ 
+       E CLK     |_______________________________________________| Low for 6 clks and high for 4  |
+             ____________________________________
+      CIA0/1                                     |________________________________________________|
+                                                 '-- Assert 2 clks before E CLK goes high
+             _________________________________________________________________________
+      /DTACK                               Asserted 2.5 clocks after E CLK goes high  |___________|
+
+  A.3 BASIC CPU SIGNALS
+             ____________                 _____________________________________
+         /AS         |||||_______________||||| Negated "sometime" in S7
+                       '---------------------- Asserted "sometime" in S2
+
+             ____________________         _____________________________________
+         /DS                 |||||_______||||| Negated "sometime" in S7
+                               '-------------- Asserted "sometime" in S4
+                               :       :
+                                ~~~~~~~        Data bus is latched in here     
+  A.4 ROM ACCESS
+             ______                             _______________________________
+        /ROM       |___________________________| Negated on non-ROM address
+                   '---------------------------- Assert when address is decoded
+
+             ________________                 _________________________________
+      /DTACK                 |_______________| Negate when /AS negates and CCKQ high
+                             '---------------- Asserted at next CCKQ high
+                               :       :       after /BLITnegates
+                                ~~~~~~~        Data bus is latched in here     
+
+  A.5 CHIP ACCESS
+             _______         __________________________________________________
+      /BLISS        |_______| Negate on !BLIT & CCK & 7M
+                    '-------- Assert if /BLIThigh
+             _________ __________
+       /BLIT _________|          |_____________________________________________
+
+      /RAMENN _______                  _________________________________________
+      /REGEN        |________________| Negate when CCKQ low and /BLISS negated
+                    '----------------- Assert when address is decoded
+             ____________                     _________________________________
+        /OEL             |___________________| Negate when /AS negates and CCKQ high
+                         '-------------------- Assert on reads when /AS asserts
+                                               and /BLIThigh, CCK high
+                                               LS323 is transparent when high
+                _______         _______         _______         _______        
+      /LATCH __|       |_______|       |_______|       |_______|       |_______
+               '-------'         LS323 samples data when /LATCH is high
+                       '-------' LS323 holds data when /LATCH is low
+             ____________________             _________________________________             
+        /OEB                     |___________| Negate when /AS negates and CCKQ high
+                                 '------------ Assert on writes when /DS asserts
+                                               and /BLIThigh, CCK high
+             ________________                 _________________________________
+      /DTACK                 |_______________| Negate when /AS negates and CCKQ high
+                             '---------------- Asserted at next CCKQ high
+                               :       :       after /BLITnegates
+                                ~~~~~~~        Data bus is latched in here     
+
+APPENDIX B. A2000 PALASM EQUATIONS
+
+    Gary is essentially an amalgamation of the two programmable gate array
+    chips PALEN (U26), PALCAS (U27), as well as various discrete logic chips.
+    As such the A2000 PALASM EQUATIONS serve as a reference for the internal
+    logic for Gary if required.
+
+    PAL20L8                                           PAL DESIGN SPECIFICATION
+    PART NO.: 380 XXX-01  DESCRPT.:PALEN     REV.3    FRANK ULLMANN   03-09-86
+    MEM. AND DTACK DECODER FOR A2500 MAINBOARD (U26) ASSY 380...
+    COMMODORE BSW        !! PRELIMINARY !!
+        
+    A23 A22 A21 A20 A19 A18 R/W AS BLIT OVL OVR GND
+    CCK CCKQ VPA MYRAME CLKE REGEN RAMEN DTACK BLISS ROMEN XRDY Vcc
+
+
+    ENA     = /AS*DTACK*OVR*/CCK*CCKQ                   ; CHIP SELECT ENABLE
+                                                  
+    IF (OVR) /VPA = /AS*A23*/A22*A21                    ; TRISTATE OVR=L
+                                                        ; $A00000-BFFFFF
+                                                  
+    /MYRAME = ENA* A23* A22* A21                        ; $E00000-FFFFFF
+            + ENA*/A23*/A22*/A21*OVL                    ; $000000-1FFFFF IF
+            + ENA* A23* A22*/A21*A20*A19*/A18           ; OVL=H, OVR=H !
+            + /MYRAME*/CCK                              ; $D80000-DBFFFF
+            + /MYRAME*/CCKQ                                                  
+ 
+    /RAMEN  = BLIT*ENA*/A23*/A22*/A21*/OVL              ; $000000-1FFFFF IF
+            + /RAMEN*/CCK                               ; OVL=L, OVR=H !
+            + /RAMEN*/CCKQ                                                  
+ 
+    IF (OVR) /DTACK =                                   ; TRISTATE OVR=L
+              /AS*/A23*/A22* A21*XRDY                   ; $200000-3FFFFF EXRAM
+            + /AS*/A23* A22*     XRDY                   ; $400000-7FFFFF EXRAM
+            + /AS* A23*/A22*/A2I*XRDY                   ; $800000-9FFFFF EXRAM
+            + /MYRAME*XRDY*/CCKQ                        ; $000000-1FFFFF OVL=H
+                                                        ; AND $E00000-FFFFFF
+            + /RAMEN*/CCKQ                              ; $000000-1FFFFF OVL=L
+            + /REGEN*/CCKQ                              ; $C00000-D7FFFF
+                                                        ; AND $DC0000-DF0000
+            + /DTACK*/AS*XRDY                                                  
+ 
+    /REGEN  = BLIT*ENA*A23*A22*/A21* A20*/A19           ; $D00000-$D7FFFF
+            + BLIT*ENA*A23*A22*/A21* A20* Al9*A18       ; $DC0000-$DFFFFF
+            + BLIT*ENA*A23*A22*/A21*/A20                ; $C00000-$CFFFFF
+            + /REGEN*/CCK                                                 
+            + /REGEN*/CCKQ                                                 
+
+    /BLISS  = ENA*/A23*/A22*/A21*/OVL                   ; $000000-1FFFFF OVL=L
+            + ENA* A23* A22*/A21                        ; $C00000-DFFFFF
+            + /BLISS*/CCK                                                 
+            + /BLISS*/CCKQ                                                    
+
+    /ROMEN  = /AS* A23* A22* A21* A20* A19*OVR*R/W      ; $F80000-FFFFFF
+            + /AS* A23* A22* A21*/A20*/A19*OVR*R/W      ; $E00000-E7FFFF
+            + /AS*/A23*/A22*/A21*/A20*/A19*OVR*R/W*OVL  ; $000000-07FFFF
+            + /AS*/A23*/A22*/A21* A20* A19*OVR*R/W*OVL  ; $180000-1FFFFF
+
+    /CLKE   = /AS*A23*A22*/A21*A20*A19*/A18*OVR         ; $D80000-D8FFFF
+
+    DESCRIPTION
+
+        NAMING CONVENTIONS HAVE BEEN UPDATED AS PER MODERN COMMODORE NAMING
+        CONVENTIONS (E.G., CCK WAS C1).
+
+        THE CLOCK IS NOW TILED THROUGHOUT THE SPACE $D80000-D8FFFF.  IF
+        MORE PRECISE SELECTION TO $D80000-$D8FFFF IS REALLY NEEDED, THEN
+        THIS MUST BE DONE EXTERNALLY USING THE /CS INPUT ON THE CLOCK CHIP.
+
+        DTACK FOR THE CLOCK IS HANDLED IN THE MYRAME EQUATION BECAUSE THE DTACK
+        EQUATION ALREADY HAS 7 OR TERMS!  THIS MEANS THAT CLOCK ACCESSES WILL BE
+        SYNCHRONIZED TO VIDEO CYCLES, BUT THIS SHOULD CREATE NO MAJOR PROBLEMS.
+
+        THE IMPLEMENTATION OF ROMEN/MYRAME MATCHES THE A1000 -  IT MIGHT BE
+        DESIREABLE TO HAVE THE ADDRESS RANGE IN MYRAME MATCH THE ROM SELECT
+        ADDRESS RANGE...
+
+        MYRAME OUTPUT IS NOT USED EXTERNALLY - ONLY INTERNAL USAGE!!!
+
+        ENA IS NOT USED EXTERNALLY - ONLY INTERNAL USAGE!!!
+
+    PAL16L8                                           PAL DESIGN SPECIFICATION
+    PART NO.: 380 XXX-01  DESCRIPT.:PALCAS  REV.2     FRANK ULLMANN  08-29-86
+    RAM/ROM DECODER FOR A2500 MAINBOARD REV.2 (U27) ASSY 380...
+    COMMODORE BSW        !! PRELIMINARY !!
+
+    ARW CCK CCKQ PRW UDS LDS RAMEN REGEN CLKE GND
+    BLIT CLKRD RRW LCEN UCEN OEL OEB DAE CLKWR Vcc
+
+        /OEL    = /RAMEN*PRW*CCK                        ; ENABLE RAM READ
+                + /REGEN*PRW*CCK                        ; BUFFER
+                + /OEL*LDS
+                + /OEL*UDS
+
+        /OEB    = /RAMEN*/PRW                           ; ENABLE RAM WRITE
+                + /REGEN*/PRW                           ; BUFFER
+                + /OEB*CCK
+
+        /UCEN   = /DAE*RAMEN*CCK                        ; GENERATE CAS
+                + DAE*/RAMEN*/UDS*CCK                   ; SIGNALS
+                + /UCEN*CCK
+
+        /LCEN   = /DAE*RAMEN*CCK                        ; GENERATE CAS
+                + DAE*/RAMEN*/LDS*CCK                   ; SIGNALS
+                + /LCEN*CCK
+
+        /RRW    = /RAMEN*/PRW                           ; /WE FOR DRAMS CPU
+                + /DAE*/ARW*/CCK                        ; OR AGNUS ACCESS
+                + /RRW*/DAE;
+
+        /DAE    = /BLIT*/CCK*CCKQ                       ; CHIP RAM ADDR ENABLE
+                + /DAE*/CCK
+                + /DAE*/CCKQ
+
+        /CLKRD  = /CLKE*/LDS*PRW                        ; CLOCK READ
+
+        /CLKWR  = /CLKE*/LDS*/PRW                       ; CLOCK WRITE
