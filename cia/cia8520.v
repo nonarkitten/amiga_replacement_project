@@ -18,6 +18,7 @@
  * - timers decrement on posedges
  * - tod increment at negedge
  * - separate serial data register for input and output (documentation does not specify if only one register is used)
+ * - counter decrement logic is inverted internally (store 0x0000 instead of 0xffff and use addition)
  */
  module cia8520(
   input nRES, // /RES input (active low)
@@ -314,11 +315,12 @@ reg ta_run; // timer run flag (stable for read)
 reg ta_tck; // timer tick flag
 reg ta_fld; // force load
 
-wire [16:0] ta_nxt = ta_count - 1'd1;
-wire ta_z = ta_nxt[16]; // use borrow to detect zero
+// since latch and count are inverted we use addition and carry instead of substraction and borrow
+wire [16:0] ta_nxt = ta_count + 1'd1;
+wire ta_z = ta_nxt[16]; // use carry to detect zero
 
 // timer fast and expiration flags
-wire ta_fst = ~cra_inmd & ~cra_rnmd & ta_z & (ta_latch == 16'b0);
+wire ta_fst = ~cra_inmd & ~cra_rnmd & ta_z & (ta_latch == 16'hffff);
 reg  ta_exp; // timer expiration flag (may be continuous)
 
 // timer output pulse (on PB6)
@@ -330,8 +332,8 @@ wire ta_o = cra_otmd ? ta_tgl : ta_pls;
 
 initial begin
   // powerup state
-  ta_latch = 16'hffff;
-  ta_count = 16'hffff;
+  ta_latch = 16'h0000;
+  ta_count = 16'h0000;
   ta_tgl = 1'b0;
   ta_run = 1'b0;
   ta_tck = 1'b0;
@@ -343,7 +345,7 @@ always @(posedge ECLK) begin
   if (rst_i) begin
     ta_run <= 1'b0;
     ta_tck <= 1'b0;
-    ta_count <= 16'hffff;
+    ta_count <= 16'h0000;
   end
   else begin
     ta_run <= cra_strt;
@@ -383,13 +385,13 @@ end
 
 always @(negedge ECLK) begin
   if (rst_i) begin
-    ta_latch <= 16'hffff;
+    ta_latch <= 16'h0000;
   end
   else if (sel_i & we_i) begin
     if (adr_talo)
-      ta_latch[7:0]  <= DBi;
+      ta_latch[7:0]  <= ~DBi;
     if (adr_tahi)
-      ta_latch[15:8] <= DBi;
+      ta_latch[15:8] <= ~DBi;
   end
 end
 
@@ -424,11 +426,12 @@ reg tb_run; // timer run flag (stable for read)
 reg tb_tck; // timer tick flag
 reg tb_fld; // force load
 
-wire [16:0] tb_nxt = tb_count - 1'd1;
-wire tb_z = tb_nxt[16]; // use borrow to detect zero
+// since latch and count are inverted we use addition and carry instead of substraction and borrow
+wire [16:0] tb_nxt = tb_count + 1'd1;
+wire tb_z = tb_nxt[16]; // use carry to detect zero
 
 // timer fast and expiration flags
-wire tb_fst = (crb_inmd == 2'b00) & ~crb_rnmd & tb_z & (tb_latch == 16'b0);
+wire tb_fst = (crb_inmd == 2'b00) & ~crb_rnmd & tb_z & (tb_latch == 16'hffff);
 reg  tb_exp; // timer expiration flag (may be continuous)
 
 // timer output pulse (on PB7)
@@ -453,8 +456,8 @@ end
 
 initial begin
   // powerup state
-  tb_latch = 16'hffff;
-  tb_count = 16'hffff;
+  tb_latch = 16'h0000;
+  tb_count = 16'h0000;
   tb_tgl = 1'b0;
   tb_run = 1'b0;
   tb_tck = 1'b0;
@@ -466,14 +469,14 @@ always @(posedge ECLK) begin
   if (rst_i) begin
     tb_run <= 1'b0;
     tb_tck <= 1'b0;
-    tb_count <= 16'hffff;
+    tb_count <= 16'h0000;
   end
   else begin
     tb_run <= crb_strt;
     tb_tck <= crb_strt & tb_i;
 
     if (crb_strt & tb_i) begin
-      tb_count <= tb_fld | tb_z ? tb_latch : tb_nxt;
+      tb_count <= tb_fld | tb_z ? tb_latch : tb_nxt[15:0];
     end
     else if (tb_fld) begin
       tb_count <= tb_latch;
@@ -506,13 +509,13 @@ end
 
 always @(negedge ECLK) begin
   if (rst_i) begin
-    tb_latch <= 16'hffff;
+    tb_latch <= 16'h0000;
   end
   else if (sel_i & we_i) begin
     if (adr_tblo)
-      tb_latch[7:0]  <= DBi;
+      tb_latch[7:0]  <= ~DBi;
     if (adr_tbhi)
-      tb_latch[15:8] <= DBi;
+      tb_latch[15:8] <= ~DBi;
   end
 end
 
@@ -836,13 +839,13 @@ always @(*) begin
     REG_DDRB:
       dat_r = ddrb;
     REG_TA_LO:
-      dat_r = ta_count[7:0];
+      dat_r = ~ta_count[7:0];
     REG_TA_HI:
-      dat_r = ta_count[15:8];
+      dat_r = ~ta_count[15:8];
     REG_TB_LO:
-      dat_r = tb_count[7:0];
+      dat_r = ~tb_count[7:0];
     REG_TB_HI:
-      dat_r = tb_count[15:8];
+      dat_r = ~tb_count[15:8];
     REG_TOD_LOW:
       dat_r = tod_latch[7:0];
     REG_TOD_MID:
