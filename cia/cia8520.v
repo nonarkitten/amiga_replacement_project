@@ -320,7 +320,7 @@ wire [16:0] ta_nxt = ta_count + 1'd1;
 wire ta_z = ta_nxt[16]; // use carry to detect zero
 
 // timer fast and expiration flags
-wire ta_fst = ~cra_inmd & ~cra_rnmd & ta_z & (ta_latch == 16'hffff);
+wire ta_fst = ~cra_inmd & ~cra_rnmd & ta_z & (&ta_latch);
 reg  ta_exp; // timer expiration flag (may be continuous)
 
 // timer output pulse (on PB6)
@@ -431,7 +431,7 @@ wire [16:0] tb_nxt = tb_count + 1'd1;
 wire tb_z = tb_nxt[16]; // use carry to detect zero
 
 // timer fast and expiration flags
-wire tb_fst = (crb_inmd == 2'b00) & ~crb_rnmd & tb_z & (tb_latch == 16'hffff);
+wire tb_fst = (crb_inmd == 2'b00) & ~crb_rnmd & tb_z & (&tb_latch);
 reg  tb_exp; // timer expiration flag (may be continuous)
 
 // timer output pulse (on PB7)
@@ -796,7 +796,7 @@ always @(negedge ECLK) begin
     end
   end
   else begin
-    icr_rst <= &'b0;
+    icr_rst <= 1'b0;
   end
 end
 
