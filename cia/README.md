@@ -12,7 +12,7 @@ It has been reimplemented to offer the following features:
 The implementation is split across several modules to improve readability, verification, and maintainability. Further work will make the design more FPGA-friendly (e.g. use of a single internal FPGA clock with clock-enable signals instead of relying directly on phi2).
 
 The following modules are available:
-- [cia_top.v](cia_top.v) : CIA 8520 wrapper. This module is the verilog representation of the real chip pins including tri-state ones. It still requires external pull-ups (or equivalent FPGA I/O constraints).
+- [cia8520_top.v](cia8520_top.v) : CIA 8520 wrapper. This module is the verilog representation of the real chip pins including tri-state ones. It still requires external pull-ups (or equivalent FPGA I/O constraints).
 - [cia8520.v](cia8520.v) : CIA Implementation top module. It is responsible for visible register reads and writes as well as CNT/SP synchronization. 
 - [cia_decoder.v](cia_decoder.v) : Purely combinational address decoder. Selects the target register and routes enables to the appropriate submodule.
 - [cia_handshake.v](cia_handshake.v) : Implements flag interrupt pulse and PC pulse following PRB
