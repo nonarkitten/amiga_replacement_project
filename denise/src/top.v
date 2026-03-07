@@ -5,29 +5,29 @@
 
 module top(
   // CSG 8362R8 Denise chip
-  input             M1H,
-  input             M0H,
+  input         M1H,
+  input         M0H,
 
-  input      [8:1]  RGA,
+  input   [8:1] RGA,
 
-  input             BURST_n, // ignored right now
 
-  output     [3:0]  RED,
-  output     [3:0]  GRN,
-  output     [3:0]  BLU,
+  output  [3:0] RED,
+  output  [3:0] GRN,
+  output  [3:0] BLU,
 
-  input             CSYNC_n, // ignored right now
-  output            ZD_n,    // ignored right now
-  input             CDAC_n,
-  input             C7M,
-  input             CCK,
+  output        BURST_n, // Composite colour burst
+  output        ZD_n,    // Transparency signal (genlock)
 
-  input             M0V,
-  input             M1V,
+  input         CSYNC_n, // ignored right now
+  input         CDAC_n,
+  input         C7M,
+  input         CCK,
 
-  inout      [15:0] DB,
+  input         M0V,
+  input         M1V,
+
+  inout  [15:0] DB
 );
-
 
 //////////////////////////////////////////////////////
 // PLL that generates 56 MHz clock from 7 MHz       //
@@ -57,7 +57,7 @@ SB_PLL40_CORE #(
 
 // Resample actual CCK at 56MHz
 reg [7:0] cck;
-always @(posedge clk_56m) cck <= { cck[4:0], CCK };
+always @(posedge clk_56m) cck <= { cck[6:0], CCK };
 
 wire w_cck_edge  = (cck[0] != cck[1]);                       // Lowres pixel clock
 wire w_cckq_edge = (cck[4] != cck[5]);                       // Hires pixel clock
@@ -65,10 +65,10 @@ wire w_cdac_edge = (cck[2] != cck[3]) || (cck[6] != cck[7]); // Super-hires pixe
 
 wire w_cck  = cck[0]; // Recreate CCK (&&w_cck = rising, &&~w_cck = falling)
 wire w_cckq = cck[4]; // Recreate CCKQ
+wire w_c7m  = cck[0] ^ cck[4];
+wire w_cdac = cck[2] ^ cck[6];
 
-/////////////////////////////
-// Instantiate Denise chip //
-/////////////////////////////
+// RGA bus
 wire  [8:1] w_rga = RGA;
 
 // Data bus
@@ -82,16 +82,18 @@ assign DB = (w_dbo_d_en) ? w_dbo_d : 16'hz;
 wire [3:0] w_red;
 wire [3:0] w_green;
 wire [3:0] w_blue;
-wire       w_vsync;
-wire       w_blank_n;
-wire       w_sol;
+wire       w_zd;
+wire       w_burst = BURST_n;
 
-Denise denise(
+denise denise(
     // Clock
     .clk(clk_56m),
+
     // Clock enables
     .cck(w_cck),
     .cckq(w_cckq),
+    .c7m(w_c7m),
+    .cdac(w_cdac),
     .cck_edge(w_cck_edge),
     .cckq_edge(w_cckq_edge),
     .cdac_edge(w_cdac_edge),
@@ -105,7 +107,6 @@ Denise denise(
     // Config
     .cfg_ecs(1'b1),
     .cfg_a1k(1'b0),
-    .pal_ntsc(),
 
     // Bus Input/Output
     .rga(w_rga),
@@ -117,19 +118,13 @@ Denise denise(
     .red(w_red),
     .green(w_green),
     .blue(w_blue),
-    .vsync(w_vsync),
-    .blank_n(w_blank_n),
-    .sol(w_sol)
+    .zd(w_zd),
+    .burst(w_burst)
 );
-
-/////////////////
-// Amber TBD   //
-/////////////////
 
 assign RED = w_red;
 assign GRN = w_green;
 assign BLU = w_blue;
-
-assign ZD_n = 1;
+assign ZD_n = w_zd;
 
 endmodule

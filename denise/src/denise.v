@@ -3,12 +3,17 @@
 //  
 // See README.md for details
 
-module Denise (
+module denise (
     // Main clock
     input clk,        // Master clock (28/56/85 MHz)
-    // Generated clocks
+
+    // Regenerated clocks
     input cck,        // CCK clock
     input cckq,       // CCK quadrature clock
+    input c7m,        // 7MHz clock
+    input cdac,       // 7MHz quadrature clock
+
+    // Clock edges (56Mhz pulse)
     input cck_edge,   // CCK edge
     input cckq_edge,  // CCKQ edge
     input cdac_edge,  // CDAC edge
@@ -33,776 +38,649 @@ module Denise (
     output     [3:0] red,      // Red component output
     output     [3:0] green,    // Green component output
     output     [3:0] blue,     // Blue component output
-    output reg       vsync,    // Vertical synchro
-    output           blank_n,  // Composite blanking
-    output reg       sol,      // Start of line (HPOS = 32)
-    output           pal_ntsc  // PAL (1), NSTC (0) flag
-);
-
-  ///////////////////////////////
-  // Register address decoding //
-  ///////////////////////////////
-
-  reg [8:1] r_rga_p1;
-  always @(posedge clk) begin
-    if (cck_edge & cck) begin
-      // Latch RGA bits for next cycle
-      r_rga_p1 <= rga;  //[5:1];
-    end
-  end
-
-  // Comparators
-  wire w_rregs_joy0_p1 = (r_rga_p1[8:1] == 8'b0_0000_101);  // JOYxDAT  : $00A
-  wire w_rregs_joy1_p1 = (r_rga_p1[8:1] == 8'b0_0000_110);  // JOYxDAT  : $00C
-  wire w_rregs_clx_p1 =  (r_rga_p1[8:1] == 8'b0_0000_111);  // CLXDAT   : $00E
-  wire w_rregs_id_p1 =   (r_rga_p1[8:1] == 8'b0_0111_110);  // DENISEID : $07C
-
-  wire w_wregs_joyw_p1 = (r_rga_p1[8:1] == 8'b0_0011_011);  // JOYTEST  : $036
-  wire w_wregs_str_p1 =  (r_rga_p1[8:1] == 8'b0_0011_1xx);  // Strobes  : $038 - $03E
-  wire w_wregs_diwb_p1 = (r_rga_p1[8:1] == 8'b0_1000_111);  // DIWSTRT  : $08E
-  wire w_wregs_diwe_p1 = (r_rga_p1[8:1] == 8'b0_1001_000);  // DIWSTOP  : $090
-  wire w_wregs_clx_p1 =  (r_rga_p1[8:1] == 8'b0_1001_100);  // CLXCON   : $098
-  wire w_wregs_ctl_p1 =  (r_rga_p1[8:1] == 8'b1_0000_0xx);  // BPLCONx  : $100 - $106
-  wire w_wregs_bpl_p1 =  (r_rga_p1[8:1] == 8'b1_0001_xxx);  // BPLxDAT  : $110 - $11E
-  wire w_wregs_spr_p1 =  (r_rga_p1[8:1] == 8'b1_01xx_xxx);  // Sprites  : $140 - $17E
-  wire w_wregs_clut_p1 = (r_rga_p1[8:1] == 8'b1_10xx_xxx);  // Color    : $180 - $1BE
-  wire w_wregs_diwh_p1 = (r_rga_p1[8:1] == 8'b1_1110_010);  // DIWHIGH  : $1E4
-
-  wire [15:0] jm_db_out;
-  wire [15:0] clx_db_out;
-  wire        w_denise_id = w_rregs_id_p1 && cfg_ecs;
-
-  assign db_out = jm_db_out | clx_db_out | (w_denise_id ? 16'hFFFC : 16'd0);
-  assign db_oen = w_rregs_clx_p1 | w_rregs_joy0_p1 | w_rregs_joy1_p1 | w_denise_id;
-
-  // Implement Joystick & Mouse decoder
-  JoyMouse joymouse (
-      .clk(clk),
-      .cck(cck),
-      .cck_edge(cck_edge),
-      .m0h(m0h),
-      .m0v(m0v),
-      .m1h(m1h),
-      .m1v(m1v),
-      .w_rregs_joy0_p1(w_rregs_joy0_p1),
-      .w_rregs_joy1_p1(w_rregs_joy1_p1),
-      .w_wregs_joyw_p1(w_wregs_joyw_p1),
-      .db_in(db_in),
-      .db_out(jm_db_out)
+    output           zd,       // Genlock
+    output           burst     // Composite color burst
   );
 
-  wire [5:0] bpl_data = w_bpl_pixel_bus[5:0];
-  // wire [1:0] spr_data [0:7];
-  // reg [1:0] r_spr_pix_p2 [0:7];
 
-  // Pack sprite data
-  // wire [15:0] spr_data_flat = {
-  //   spr_data[7],spr_data[6],spr_data[5],spr_data[4],
-  //   spr_data[3],spr_data[2],spr_data[1],spr_data[0] };
-  wire [15:0] spr_data_flat = {
-    r_spr_pix_p2[7],
-    r_spr_pix_p2[6],
-    r_spr_pix_p2[5],
-    r_spr_pix_p2[4],
-    r_spr_pix_p2[3],
-    r_spr_pix_p2[2],
-    r_spr_pix_p2[1],
-    r_spr_pix_p2[0]
-  };
+  // JOYxDAT registers
+  reg [15:0] r_JOY0DAT;
+  reg [15:0] r_JOY1DAT;
+  reg [15:0] r_JOYTEST;
 
-  // Implement Collision
-  Collision collision (
-      .clk(clk),
-      .cck_pos_edge(cck_edge && cck),
-      .w_wregs_clx_p1(w_wregs_clx_p1),
-      .w_rregs_clx_p1(w_rregs_clx_p1),
-      .db_in(db_in),
-      .db_out(clx_db_out),
-      .bpl_data(bpl_data),
-      .spr_data_flat(spr_data_flat)
-  );
+  quad m0v_quad(clk, cck, cck_edge, w_wregs_joyw_en, r_JOYTEST[15:8], m0v, r_JOY0DAT[15:8]);
+  quad m0h_quad(clk, cck, cck_edge, w_wregs_joyw_en, r_JOYTEST[7:0] , m0h, r_JOY0DAT[7:0] );
+  quad m1v_quad(clk, cck, cck_edge, w_wregs_joyw_en, r_JOYTEST[15:8], m1v, r_JOY1DAT[15:8]);
+  quad m1h_quad(clk, cck, cck_edge, w_wregs_joyw_en, r_JOYTEST[7:0] , m1h, r_JOY1DAT[7:0] );
 
-  ///////////////////
-  // PAL/NTSC flag //
-  ///////////////////
+  // CLXCON register
+  reg   [3:0] r_ENSP;
+  reg   [5:0] r_ENBP;
+  reg   [5:0] r_MVBP;
 
-  reg [1:0] r_str_ctr;
-
-  always @(posedge clk) begin
-    if (cck_edge & cck) begin
-      if (w_wregs_str_p1) begin
-        // STRLONG strobes reset the counter
-        if (r_rga_p1[2:1] == 2'b11) r_str_ctr <= 2'b00;
-        else if (r_str_ctr != 2'b11) r_str_ctr <= r_str_ctr + 2'd1;
-      end
-    end
-  end
-
-  assign pal_ntsc = &r_str_ctr;
-
-  //////////////////////
-  // Vertical synchro //
-  //////////////////////
-
-  reg [3:0] r_equ_ctr;
-
-  always @(posedge clk) begin
-    if (cck_edge & cck) begin
-      if (w_wregs_str_p1) begin
-        // Discard STRLONG strobes
-        if (r_rga_p1[2:1] != 2'b11) begin
-          // STREQU strobes increment counter
-          if (r_rga_p1[2:1] == 2'b00) r_equ_ctr <= r_equ_ctr + 4'd1;
-          // STRVBL and STRHOR strobes clear it
-          else
-            r_equ_ctr <= 4'd0;
-        end
-      end
-    end
-    if (cck_edge) begin
-      if (sol) begin
-        vsync <= |r_equ_ctr;
-      end
-    end
-  end
-
-  ////////////////////////
-  // Horizontal counter //
-  ////////////////////////
-
-  wire       w_hpos_clr;
-  wire       w_hpos_dis;
-  reg  [8:0] r_hpos;
-  reg        r_lol_ena;
-
-  // HPOS clear conditions
-  assign w_hpos_clr = (((r_rga_p1[2:1] == 2'b00) && (cfg_ecs)) || 
-                        (r_rga_p1[2:1] == 2'b01) ||
-                        (r_rga_p1[2:1] == 2'b10)) ? (w_wregs_str_p1 & cck) : 1'b0;
-  // HPOS disable conditions
-  assign w_hpos_dis = (r_rga_p1[2:1] == 2'b11) ? (w_wregs_str_p1 & cck) : 1'b0;
-
-  always @(posedge clk) begin
-    if (cck_edge) begin
-      if (w_hpos_clr) begin
-        // STREQU (ECS only), STRVBL or STRHOR : HPOS starts at 2
-        r_hpos    <= 9'h1fe;
-        r_lol_ena <= 1'b0;
-      end else begin
-        // STRLONG : long line, disable HPOS counting during 1 clock cycle
-        if (w_hpos_dis) r_lol_ena <= 1'b1;
-        else r_hpos <= r_hpos + 9'd1;
-      end
-    end
-    // Start of line flag for external scandoubler
-    if (r_hpos == 9'd32)
-      if (cckq_edge) sol <= 1'b1;
-      else if (cck_edge) sol <= 1'b0;
-  end
-
-  ///////////////////////////////
-  // Horizontal display window //
-  ///////////////////////////////
-
-  reg [8:0] r_HDIWSTRT;
-  reg [8:0] r_HDIWSTOP;
-  reg       r_hwin_ena;
-  // reg       r_hwin_ena_p1;
-  reg       r_hwin_ena_p2;
-  reg       r_vwin_ena;
-
-  always @(posedge clk) begin
-    if (cck_edge & cck) begin
-      // DIWSTRT
-      if (w_wregs_diwb_p1) r_HDIWSTRT <= {1'b0, db_in[7:0]};
-      // DIWSTOP
-      if (w_wregs_diwe_p1) r_HDIWSTOP <= {1'b1, db_in[7:0]};
-      // DIWHIGH
-      if ((w_wregs_diwh_p1) && (cfg_ecs)) begin
-        r_HDIWSTRT[8] <= db_in[5];
-        r_HDIWSTOP[8] <= db_in[13];
-      end
-    end
-  end
-
-  always @(posedge clk) begin
-    if (cckq_edge) begin
-      // Display window horizontal start
-      if (r_hpos == r_HDIWSTRT) r_hwin_ena_p2 <= r_vwin_ena;  //1'b1;
-      // Display window horizontal stop
-      else if (r_hpos == r_HDIWSTOP) r_hwin_ena_p2 <= 1'b0;
-
-      // Vertical window
-      if (r_hpos == 9'h013) r_vwin_ena <= 1'b0;
-      else if (w_wregs_bpl_p1) r_vwin_ena <= 1'b1;
-
-      // Delayed horizontal + vertical window
-      // r_hwin_ena_p2 <= r_hwin_ena & r_vwin_ena;
-      // r_hwin_ena_p2 <= r_hwin_ena_p1;
-    end
-  end
-
-  ///////////////////////
-  // Vertical blanking //
-  ///////////////////////
-
-  reg r_vblank_p2;
-
-  always @(posedge clk) begin
-    if (cck_edge & cck) begin
-      // Vertical blanking only during STREQU and STRVBL
-      if ((w_wregs_str_p1) && (r_rga_p1[2:1] != 2'b11)) r_vblank_p2 <= ~r_rga_p1[2];
-    end
-  end
-
-  /////////////////////////
-  // Horizontal blanking //
-  /////////////////////////
-
-  reg r_hblank_p3;
-
-  always @(posedge clk) begin
-    //if (cckq_edge) begin
-    //  r_hblank_p3 <= ~r_hwin_ena_p2;
-    //end
-    if (cck_edge) begin
-      if (r_hpos == 9'h013) r_hblank_p3 <= 1'b1;
-      else if (r_hpos == 9'h061) r_hblank_p3 <= 1'b0;
-    end
-  end
-
-  ////////////////////////
-  // Composite blanking //
-  ////////////////////////
-
-  reg r_cblank_p4;
-
-  // (BUG!! but implemented this way on real HW)
-  always @(posedge clk) begin
-    if (cckq_edge) begin
-      r_cblank_p4 <= r_hblank_p3 | r_vblank_p2;
-    end
-  end
-
-
-  ////////////////////////////////
-  // Bitplane Control registers //
-  ////////////////////////////////
-
-  reg       r_HIRES;
-  reg       r_SHRES;
-  reg [2:0] r_BPU;
-  reg       r_HOMOD;
-  reg       r_DBLPF;
+  // CLXDAT register
+  reg  [14:0] r_CLXDAT;
+  wire [14:0] w_CLXDAT;
 
   // BPLCON0 register
-  always @(posedge clk) begin
-    if (cck_edge & cck) begin
-      if ((w_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b00)) begin
-        r_HIRES <= db_in[15];
-        r_BPU   <= db_in[14:12];
-        r_HOMOD <= db_in[11];
-        r_DBLPF <= db_in[10];
-        r_SHRES <= db_in[6] && cfg_ecs;
-      end
-    end
-  end
-
-  reg [3:0] r_PF1H;
-  reg [3:0] r_PF2H;
+  reg         r_HIRES;
+  reg         r_SHRES;
+  reg   [2:0] r_BPU;
+  reg         r_HOMOD;
+  reg         r_DBLPF;
 
   // BPLCON1 register
-  always @(posedge clk) begin
-    if (cck_edge & cck) begin
-      if ((w_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b01)) begin
-        r_PF1H <= db_in[3:0];
-        r_PF2H <= db_in[7:4];
-      end
-    end
-  end
-
-  reg       r_PF2PRI;
-  reg [2:0] r_PF2P;
-  reg [2:0] r_PF1P;
+  reg   [3:0] r_PF1H;
+  reg   [3:0] r_PF2H;
 
   // BPLCON2 register
-  always @(posedge clk) begin
-    if (cck_edge & cck) begin
-      if ((w_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b10)) begin
-        r_PF2PRI <= db_in[6];
-        r_PF2P   <= db_in[5:3];
-        r_PF1P   <= db_in[2:0];
-      end
-    end
-  end
+  reg   [2:0] r_ZDBPSEL;    // Bitplane Key
+  reg         r_ZDBPEN;     // Use Bitplane Key
+  reg         r_ZDCTEN;     // Use Color Key
+  reg         r_KILLEHB;    // Kill halfbrite  
+  reg         r_PF2PRI;     // Flip Playfield priority
+  reg   [2:0] r_PF2P;       // Playfield 2 priority vs sprites
+  reg   [2:0] r_PF1P;       // Playfield 1 priority vs sprites
 
-  reg [7:0] r_bpl_ena;
+  // BPLCON3 register
+  reg   [2:0] r_SPR_RES;
+  reg         r_BRDRBLNK;
+  reg         r_BRDNTRAN;
 
-  // Bitplanes enable
-  always @(posedge clk) begin
-    if (cck_edge & cck) begin
-      // Bitplane enable flags updated during BPL1DAT write
-      if ((w_wregs_bpl_p1) && (r_rga_p1[3:1] == 3'b000)) begin
-        case (r_BPU)
-          3'd0: r_bpl_ena <= 8'b00000000;
-          3'd1: r_bpl_ena <= 8'b00000001;
-          3'd2: r_bpl_ena <= 8'b00000011;
-          3'd3: r_bpl_ena <= 8'b00000111;
-          3'd4: r_bpl_ena <= 8'b00001111;
-          3'd5: r_bpl_ena <= 8'b00011111;
-          3'd6: r_bpl_ena <= 8'b00111111;
-          3'd7: r_bpl_ena <= 8'b01111111;
-        endcase
-      end
-    end
-  end
+  // BPLDAT registers
+  reg   [15:0] r_BPLxDAT [0:5]; // Register written to by DMA
+  reg   [15:0] r_BPLxTMP [0:5]; // Load into temporary when BPL 1 written
+  reg   [19:0] r_BPLxSHF [0:5]; // Load into shifters when HPOS=PFxH, extra bits for LOL
 
+  // COLORxx registers
+  reg   [11:0] r_COLORxx_lo [0:15]; // COLOR00-COLOR15
+  reg   [11:0] r_COLORxx_hi [0:15]; // COLOR16-COLOR31
+  reg          r_COLOR_KEY  [0:31];
 
-  //                                                                                    
-  //    88888888ba   88                                                    ,a8888a,     
-  //    88      "8b  88                                                  ,8P"'  `"Y8,   
-  //    88      ,8P  88                                                 ,8P        Y8,  
-  //    88aaaaaa8P'  88,dPPYba,   ,adPPYYba,  ,adPPYba,   ,adPPYba,     88          88  
-  //    88""""""'    88P'    "8a  ""     `Y8  I8[    ""  a8P_____88     88          88  
-  //    88           88       88  ,adPPPPP88   `"Y8ba,   8PP"""""""     `8b        d8'  
-  //    88           88       88  88,    ,88  aa    ]8I  "8b,   ,aa      `8ba,  ,ad8'   
-  //    88           88       88  `"8bbdP"Y8  `"YbbdP"'   `"Ybbd8"'        "Y8888P"     
-  //                                                                                    
-  //                                                                                    
-  //  Load registers and indicate when ready
+  // DIWSTRT, DIWSTOP and DIWHIGH regisers
+  reg    [8:0] r_HDIWSTRT;
+  reg    [8:0] r_HDIWSTOP;
 
-  //  Bitplanes Data
+  // Sprite Registers  
+  reg          r_SPRxATT  [0:7];
+  reg   [10:0] r_SPRxHPOS [0:7];
+  reg   [15:0] r_SPRxDATA [0:7];
+  reg   [15:0] r_SPRxDATB [0:7];
 
-  reg [15:0] r_BPLxDAT  [0:7];
-  reg        r_bpl_load;
-  reg [ 3:0] r_ddf_dly;
+  // Internal ECS Registers
+  wire        w_clk28 = cck_edge | cckq_edge | cdac_edge;
+  reg [10:0]  r_rhpos;                  // real hpos counter in shres pixels
 
-  always @(posedge clk) begin
-    if (cck_edge && cck) begin
-      // Trigger loading of second stage registers
-      r_bpl_load <= w_wregs_bpl_p1 && (r_rga_p1[3:1] == 3'b000);
-      if (w_wregs_bpl_p1) begin
-        // Load BPLxDAT register
-        r_BPLxDAT[r_rga_p1[3:1]] <= db_in[15:0];
-        // BPL1DAT is written : 
-        // if (r_rga_p1[3:1] == 3'b000) begin
-        //   // Non-aligned DDFSTRT delay
-        //   r_ddf_dly[3] <= r_hpos[3] & ~(r_HIRES | r_SHRES);
-        //   r_ddf_dly[2] <= r_hpos[2] & ~r_SHRES;
-        //   r_ddf_dly[1] <= r_hpos[1];
-        //   r_ddf_dly[0] <= 1'b0;
-        // end
-      end
-    end
-  end
+  wire [8:0]  r_hpos   = r_rhpos[10:2]; // horizontal position counter (lores pixels)
+  wire [1:0]  r_shhpos = r_rhpos[1:0];  // hires and suprehires position counter
 
-  // Sprites data and positions
-
-  reg        r_SPRATT [0:7];
-  reg [ 8:0] r_SPRHPOS[0:7];
-  reg [15:0] r_SPRDATA[0:7];
-  reg [15:0] r_SPRDATB[0:7];
-
-  reg        r_armed  [0:7];
-
-  // SPRxPOS,  SPRxCTL, SPRxDATA and SPRxDATB registers
-  always @(posedge clk) begin
-    if (cck_edge) begin
-      if ((w_wregs_spr_p1) && (cck)) begin
-        case (r_rga_p1[2:1])
-          2'b00 : // SPRxPOS register
-          begin
-            r_SPRHPOS[r_rga_p1[5:3]][8:1] <= db_in[7:0];
-          end
-          2'b01 : // SPRxCTL register
-          begin
-            r_SPRATT[r_rga_p1[5:3]]     <= db_in[7];
-            r_SPRHPOS[r_rga_p1[5:3]][0] <= db_in[0];
-            r_armed[r_rga_p1[5:3]]      <= 1'b0;  // Sprite disabled
-          end
-          2'b10 : // SPRxDATA register
-          begin
-            r_SPRDATA[r_rga_p1[5:3]] <= db_in[15:0];
-            r_armed[r_rga_p1[5:3]]   <= 1'b1;  // Sprite enabled
-          end
-          2'b11 : // SPRxDATB register
-          begin
-            r_SPRDATB[r_rga_p1[5:3]] <= db_in[15:0];
-          end
-        endcase
-      end
-    end
-  end
-
-  //                                                                            
-  //    88888888ba   88                                                     88  
-  //    88      "8b  88                                                   ,d88  
-  //    88      ,8P  88                                                 888888  
-  //    88aaaaaa8P'  88,dPPYba,   ,adPPYYba,  ,adPPYba,   ,adPPYba,         88  
-  //    88""""""'    88P'    "8a  ""     `Y8  I8[    ""  a8P_____88         88  
-  //    88           88       88  ,adPPPPP88   `"Y8ba,   8PP"""""""         88  
-  //    88           88       88  88,    ,88  aa    ]8I  "8b,   ,aa         88  
-  //    88           88       88  `"8bbdP"Y8  `"YbbdP"'   `"Ybbd8"'         88  
-  //                                                                            
-  //                                                                            
-
-  //  Latch into the shift registers on CCK
-  //  Otherwise shift out at pixel clock (BPL) or CCK (SPR)
-
-  wire w_pixel_clk = (cck_edge) || (cckq_edge && (r_HIRES || r_SHRES)) || (cdac_edge && r_SHRES);
-  integer i;
-
-  // Bitplane shifters
-  reg [15:0] r_bpl_shift[0:7];
-  reg [15:0] r_bpl_delay[0:7];
-
-  always @(posedge clk) begin
-    if (cck_edge && cck && r_bpl_load) begin
-      for (i = 0; i < 8; i = i + 1) begin
-        r_bpl_shift[i] <= r_BPLxDAT[i];
-      end
-    end else if (w_pixel_clk) begin
-      for (i = 0; i < 8; i = i + 1) begin
-        r_bpl_shift[i] <= {r_bpl_shift[i][14:0], 1'b0};
-      end
-    end
-
-    if (w_pixel_clk) begin
-      for (i = 0; i < 8; i = i + 1) begin
-        r_bpl_delay[i] <= {r_bpl_delay[i][14:0], r_bpl_shift[i][15]};
-      end
-    end
-  end
-
-  // Data out to priority & clut
-  wire [7:0] w_bpl_pixel_bus = {
-    r_bpl_delay[7][r_PF2H], r_bpl_delay[6][r_PF1H],
-    r_bpl_delay[5][r_PF2H], r_bpl_delay[4][r_PF1H],
-    r_bpl_delay[3][r_PF2H], r_bpl_delay[2][r_PF1H],
-    r_bpl_delay[1][r_PF2H], r_bpl_delay[0][r_PF1H]
-  } & r_bpl_ena & {8{r_hwin_ena_p2}};
-
-  // 140 ns delay for NTSC long lines
-
-  reg  [7:0] r_pf_lol_1;
-  reg  [7:0] r_pf_lol_2;
-  reg  [7:0] r_pf_lol_3;
-  reg  [7:0] r_pf_lol_4;
-  reg  [7:0] r_pf_lol_5;
-  reg  [7:0] r_pf_lol_6;
-  reg  [7:0] r_pf_lol_7;
-  reg  [7:0] r_pf_lol_8;
+  reg         r_armed   [0:7];
+  reg         r_enabled [0:7];
+  reg         r_vblank;         // in vertical blank
+  reg         r_vblank_p;       // previosu sample of vblank 
+  reg         r_hblank;         // in horizontal blank
+  reg         r_cblank;         // in either blank
+  // reg         r_hwin_ena;       // horizontal window
+  reg         r_lol_ena;        // long-line enabled
   
+  // Do this nearly immediately to ensure we read in time
+  assign db_out = w_rregs_joy0_en ? r_JOY0DAT        :
+                  w_rregs_joy1_en ? r_JOY1DAT        :
+                  w_rregs_clx_en  ? {1'b0, r_CLXDAT} :
+                  w_rregs_id_en   ? 16'hFFFC         :
+                                    16'd0;
+
+  assign db_oen = w_rregs_joy0_en | w_rregs_joy1_en | w_rregs_clx_en | w_rregs_id_en;
+
+  reg [15:0] r_db_in;
+  reg [8:1] r_rga_in;
+
+  //  888888ba,                                              88            8888888ba    ,ad888ba,        db         
+  //  88    `"8b                                             88            88     "8b  d8"'   `"8b      d88b        
+  //  88      `8b                                            88            88     ,8P d8'              d8'`8b       
+  //  88       88  ,adPPYba,  ,adPPYba,  ,adPPYba,   ,adPPYb,88  ,adPPYba, 88aaaaa8P' 88              d8'  `8b      
+  //  88       88 a8P_____88 a8"     "" a8"     "8a a8"    `Y88 a8P_____88 88"""88'   88     88888   d8YaaaaY8b     
+  //  88       8P 8PP""""""" 8b         8b       d8 8b       88 8PP""""""" 88   `8b   Y8,       88  d8""""""""8b    
+  //  88    .a8P  "8b,   ,aa "8a,   ,aa "8a,   ,a8" "8a,   ,d88 "8b,   ,aa 88    `8b   Y8a.   .a88 d8'        `8b   
+  //  888888Y"'    `"Ybbd8"'  `"Ybbd8"'  `"YbbdP"'   `"8bbdP"Y8  `"Ybbd8"' 88     `8b   `"Y8888P" d8'          `8b  
+
+  // Comparators
+  wire w_rregs_joy0_en  = (r_rga_in[8:1] == 8'b0_0000_101);  // JOYxDAT  : $00A
+  wire w_rregs_joy1_en  = (r_rga_in[8:1] == 8'b0_0000_110);  // JOYxDAT  : $00C
+  wire w_rregs_clx_en   = (r_rga_in[8:1] == 8'b0_0000_111);  // CLXDAT   : $00E
+  wire w_rregs_id_en    = (r_rga_in[8:1] == 8'b0_0111_110);  // DENISEID : $07C
+  wire w_wregs_joyw_en  = (r_rga_in[8:1] == 8'b0_0011_011);  // JOYTEST  : $036
+  wire w_wregs_str_en   = (r_rga_in[8:1] == 8'b0_0011_1xx);  // Strobes  : $038 - $03E
+  wire w_wregs_diwb_en  = (r_rga_in[8:1] == 8'b0_1000_111);  // DIWSTRT  : $08E
+  wire w_wregs_diwe_en  = (r_rga_in[8:1] == 8'b0_1001_000);  // DIWSTOP  : $090
+  wire w_wregs_clx_en   = (r_rga_in[8:1] == 8'b0_1001_100);  // CLXCON   : $098
+  wire w_wregs_ctl_en   = (r_rga_in[8:1] == 8'b1_0000_0xx);  // BPLCONx  : $100 - $106
+  wire w_wregs_bpl_en   = (r_rga_in[8:1] == 8'b1_0001_xxx);  // BPLDAT   : $110 - $11E
+  wire w_wregs_bpl_load = (r_rga_in[8:1] == 8'b1_0001_000);  // BPLDAT   : $110
+  wire w_wregs_spr_en   = (r_rga_in[8:1] == 8'b1_01xx_xxx);  // Sprites  : $140 - $17E
+  wire w_wregs_clut_en  = (r_rga_in[8:1] == 8'b1_10xx_xxx);  // Color    : $180 - $1BE
+  wire w_wregs_diwh_en  = (r_rga_in[8:1] == 8'b1_1110_010);  // DIWHIGH  : $1E4
+
   always @(posedge clk) begin
-    if (w_pixel_clk) begin
-      r_pf_lol_1 <= w_bpl_pixel_bus;
-      r_pf_lol_2 <= r_pf_lol_1;
-      r_pf_lol_3 <= r_pf_lol_2;
-      r_pf_lol_4 <= r_pf_lol_3;
-      r_pf_lol_5 <= r_pf_lol_4;
-      r_pf_lol_6 <= r_pf_lol_5;
-      r_pf_lol_7 <= r_pf_lol_6;
-      r_pf_lol_8 <= r_pf_lol_7;
+    
+    // Latch RGA bits
+    if (cck_edge & cck) r_rga_in <= rga;      
+
+    // Read in DB bits for next cycle
+    // Latch DB bits for next cycle
+    r_db_in <= db_in;
+
+    if (cck_edge & cck) begin
+      if (w_wregs_joyw_en) begin
+        r_JOYTEST <= r_db_in;
+      end
+
+      if (w_wregs_str_en) begin
+        if ((r_rga_in[2:1] == 2'b11) && cfg_ecs) begin
+          r_lol_ena <= 1'b1;
+        end else begin
+          r_vblank <= !r_rga_in[2];
+          r_lol_ena <= 1'b0;
+        end
+      end 
+
+      if (w_wregs_spr_en) begin
+        case (r_rga_in[2:1])
+          2'b00 : begin 
+            // SPRxPOS register
+            r_SPRxHPOS[r_rga_in[5:3]][10:3] <= r_db_in[7:0];
+          end
+          2'b01 : begin 
+            // SPRxCTL register
+            r_SPRxATT[r_rga_in[5:3]]       <= r_db_in[7];
+            //  superhires position
+            r_SPRxHPOS[r_rga_in[5:3]][1:0] <= r_db_in[4:3] & {2{cfg_ecs}};
+            r_SPRxHPOS[r_rga_in[5:3]][2]   <= r_db_in[0];
+            r_armed[r_rga_in[5:3]]         <= 0;
+          end
+          2'b10 : begin 
+            // SPRxDATA register
+            r_SPRxDATA[r_rga_in[5:3]]      <= r_db_in[15:0];
+            r_armed[r_rga_in[5:3]]         <= 1;
+          end
+          2'b11 : begin 
+            // SPRxDATB register
+            r_SPRxDATB[r_rga_in[5:3]]      <= r_db_in[15:0];
+          end
+        endcase
+      end
+
+      if (w_wregs_clx_en) begin
+        r_ENSP   <= r_db_in[15:12];
+        r_ENBP   <= r_db_in[11:6];
+        r_MVBP   <= r_db_in[5:0];        
+        r_CLXDAT <= 0;
+      end else begin
+        r_CLXDAT <= r_CLXDAT | w_CLXDAT;
+      end
+
+      if (w_wregs_ctl_en) begin
+        case (r_rga_in[2:1])
+        // BPLCON0
+        2'b00 : begin
+          r_HIRES    <= r_db_in[15];
+          r_BPU      <= r_db_in[14:12];
+          r_HOMOD    <= r_db_in[11];
+          r_DBLPF    <= r_db_in[10];
+          r_SHRES    <= r_db_in[6]     && cfg_ecs;
+          end
+        // BPLCON1
+        2'b01 : begin
+          r_PF1H     <= r_db_in[3:0]; // {r_db_in[11:10], r_db_in[3:0]}  <- AGA 64-pixel shifts
+          r_PF2H     <= r_db_in[7:4]; // {r_db_in[15:14], r_db_in[7:4]}  <- AGA 64-pixel shifts
+          end
+        // BPLCON2
+        2'b10 : begin
+          r_ZDBPSEL  <= r_db_in[14:12] && cfg_ecs;
+          r_ZDBPEN   <= r_db_in[11]    && cfg_ecs;
+          r_ZDCTEN   <= r_db_in[10]    && cfg_ecs;
+          r_KILLEHB  <= r_db_in[9]     && cfg_ecs;
+          r_PF2PRI   <= r_db_in[6];
+          r_PF2P     <= r_db_in[5:3];
+          r_PF1P     <= r_db_in[2:0];
+          end
+        // BPLCON3
+        2'b11 : begin
+          r_SPR_RES  <= r_db_in[7:6]    & {2{cfg_ecs}}; // FIXME AGA
+          r_BRDRBLNK <= r_db_in[5]     && cfg_ecs;
+          r_BRDNTRAN <= r_db_in[4]     && cfg_ecs;
+          end
+        endcase
+      end
+
+      if (w_wregs_clut_en) begin
+        r_COLOR_KEY[r_rga_in[5:1]] <= r_db_in[15];
+        if (r_rga_in[5]) 
+          r_COLORxx_hi[r_rga_in[4:1]] <= r_db_in[11:0];
+        else             
+          r_COLORxx_lo[r_rga_in[4:1]] <= r_db_in[11:0];
+      end
+
+      if (w_wregs_diwb_en) begin
+        r_HDIWSTRT <= {1'b0, r_db_in[7:0]};
+      end
+      if (w_wregs_diwe_en) begin
+        r_HDIWSTOP <= {1'b1, r_db_in[7:0]};
+      end      
+      if (w_wregs_diwh_en && cfg_ecs) begin
+        r_HDIWSTRT[8] <= r_db_in[5];
+        r_HDIWSTOP[8] <= r_db_in[13];
+      end
+    end
+  end  
+
+  //     ,ad8888ba,                                                                             
+  //    d8"'    `"8b                                       ,d                                   
+  //   d8'                                                 88                                   
+  //   88             ,adPPYba,  88       88 8b,dPPYba,  MM88MMM  ,adPPYba, 8b,dPPYba, ,adPPYba,
+  //   88            a8"     "8a 88       88 88P'   `"8a   88    a8P_____88 88P'   "Y8 I8[    ""
+  //   Y8,           8b       d8 88       88 88       88   88    8PP""""""" 88          `"Y8ba, 
+  //    Y8a.    .a8P "8a,   ,a8" "8a,   ,a88 88       88   88,   "8b,   ,aa 88         aa    ]8I
+  //     `"Y8888Y"'   `"YbbdP"'   `"YbbdP'Y8 88       88   "Y888  `"Ybbd8"' 88         `"YbbdP"'
+
+
+  reg r_vwin_ena_;
+  reg r_hwin_ena_;
+  wire r_hwin_ena = r_vwin_ena_ & r_hwin_ena_;
+  reg r_cburst;
+
+  always @(posedge clk) begin
+    // The low three bits are created by the clocks alone
+    r_rhpos[2:0] <= {
+      !(cck),       // lores bits
+      !(c7m),       // hires bits
+      !(c7m ^ cdac) // superhires bits
+    };
+
+    if (w_clk28) begin
+      // clear the high bits when told to
+      if ((r_rhpos[10:2] == 9'h1C8) || (cck_edge && cck && w_wregs_str_en && (r_rga_in[2:1] != 2'b11)))
+        r_rhpos[10:3] <= 8'h01;
+      
+      // low three bits are going to roll over, so increment
+      else if ((r_rhpos[2:0] == 3'b111))
+        r_rhpos[10:3] <= r_rhpos[10:3] + 1;
+
+      if (r_hpos == 9'h013)          r_vwin_ena_ <= 1'b0;
+      else if (w_wregs_bpl_en)       r_vwin_ena_ <= 1'b1;
+      if (r_hpos == r_HDIWSTRT)      r_hwin_ena_ <= 1'b1;
+      else if (r_hpos == r_HDIWSTOP) r_hwin_ena_ <= 1'b0;
+
+        //      if ((r_hpos) == r_HDIWSTRT) r_hwin_ena <= ~r_vblank; // Display window horizontal start
+        // else if ((r_hpos) == r_HDIWSTOP) r_hwin_ena <= 1'b0;      // Display window horizontal stop
+      // end
+
+      if (r_hpos == 9'h013) r_hblank <= 1'b1;        // Horizontal blank start
+      if (r_hpos == 9'h061) r_hblank <= 1'b0;        // Horizontal blank stop      
+
+      if (r_hpos == 9'h026) r_cburst <= cck;         // Colour burst start
+      if (r_hpos == 9'h04E) r_cburst <= 1'b0;        // Colour burst stop      
+
+      r_vblank_p <= r_vblank;
+      r_cblank   <= r_hblank || r_vblank;
+
     end
   end
 
-  wire [7:0] w_bpl_data = (!r_lol_ena) ? w_bpl_pixel_bus : r_SHRES ? r_pf_lol_8 : r_HIRES ? r_pf_lol_4 : r_pf_lol_2;
+  // Bitplane decoder (async)
+  wire [7:0] r_bpl_ena =
+    (r_BPU == 3'd0) ? 8'b00000000 :
+    (r_BPU == 3'd1) ? 8'b00000001 :
+    (r_BPU == 3'd2) ? 8'b00000011 :
+    (r_BPU == 3'd3) ? 8'b00000111 :
+    (r_BPU == 3'd4) ? 8'b00001111 :
+    (r_BPU == 3'd5) ? 8'b00011111 :
+    (r_BPU == 3'd6) ? 8'b00111111 : 
+                      8'b01111111 ;
+   
+  wire w_pixel_clk = (cck_edge) || (cckq_edge && (r_HIRES || r_SHRES)) || (cdac_edge && r_SHRES);
 
-  // Sprite shifters
-  reg [15:0] r_spr_shift_A[0:7];
-  reg [15:0] r_spr_shift_B[0:7];
+  //    88888888ba  88                     88                                    
+  //    88      "8b ""   ,d                88                                    
+  //    88      ,8P      88                88                                    
+  //    88aaaaaa8P' 88 MM88MMM 8b,dPPYba,  88 ,adPPYYba, 8b,dPPYba,   ,adPPYba,  
+  //    88""""""8b, 88   88    88P'    "8a 88 ""     `Y8 88P'   `"8a a8P_____88  
+  //    88      `8b 88   88    88       d8 88 ,adPPPPP88 88       88 8PP"""""""  
+  //    88      a8P 88   88,   88b,   ,a8" 88 88,    ,88 88       88 "8b,   ,aa  
+  //    88888888P"  88   "Y888 88`YbbdP"'  88 `"8bbdP"Y8 88       88  `"Ybbd8"'  
+  //                           88                                                
+  //                           88                                                
+  
+  // Bitplane Shifters
+  wire r_LORES = ~r_SHRES && ~r_HIRES;
+
+  wire w_bpl_shift = (r_SHRES)
+                  || (r_HIRES && (r_rhpos[0:0] == 1'b0))
+                  || (r_LORES && (r_rhpos[1:0] == 2'b11));
+
+  reg  r_pf1_load;       // load BPL registers
+  reg  r_pf2_load;       // load BPL registers
+
+  wire [3:0] w_delaymask = (r_SHRES) ? 3 : (r_HIRES) ? 7 : 15;
+  wire [4:0] w_lol_select = (r_lol_ena) ? ((r_SHRES) ? 19 : (r_HIRES) ? 17 : 16) : 15;
+
+  reg [5:0] w_bpl_bus;
 
   always @(posedge clk) begin
-    if (cck_edge) begin
-      // Sprites shift registers
-      for (i = 0; i < 8; i = i + 1) begin
-        if ((r_hpos == r_SPRHPOS[i]) && r_armed[i]) begin
-          r_spr_shift_A[i] <= r_SPRDATA[i];
-          r_spr_shift_B[i] <= r_SPRDATB[i];
-        end else begin
-          r_spr_shift_A[i] <= {r_spr_shift_A[i][14:0], 1'b0};
-          r_spr_shift_B[i] <= {r_spr_shift_B[i][14:0], 1'b0};
+    if (cck_edge & cck && w_wregs_bpl_en) begin
+      case (r_rga_in[3:1])
+        3'd0 : begin
+          r_BPLxTMP[0] <= r_db_in;
+          r_BPLxTMP[1] <= r_BPLxDAT[1];
+          r_BPLxTMP[2] <= r_BPLxDAT[2];
+          r_BPLxTMP[3] <= r_BPLxDAT[3];
+          r_BPLxTMP[4] <= r_BPLxDAT[4];
+          r_BPLxTMP[5] <= r_BPLxDAT[5];
+          r_pf1_load <= 1;
+          r_pf2_load <= 1;
+        end
+        3'd1 : r_BPLxDAT[1] <= r_db_in;
+        3'd2 : r_BPLxDAT[2] <= r_db_in;
+        3'd3 : r_BPLxDAT[3] <= r_db_in;
+        3'd4 : r_BPLxDAT[4] <= r_db_in;
+        3'd5 : r_BPLxDAT[5] <= r_db_in;
+        default:;
+      endcase
+    end
+
+    if (w_clk28) begin
+      if (r_pf1_load && ((r_hpos[3:0] & w_delaymask) == r_PF1H)) begin
+        r_pf1_load <= 0;
+        if (r_bpl_ena[0]) r_BPLxSHF[0] <= {r_BPLxSHF[0][18:15], r_BPLxTMP[0]};
+        if (r_bpl_ena[2]) r_BPLxSHF[2] <= {r_BPLxSHF[2][18:15], r_BPLxTMP[2]};
+        if (r_bpl_ena[4]) r_BPLxSHF[4] <= {r_BPLxSHF[4][18:15], r_BPLxTMP[4]};
+
+      end else if (w_bpl_shift) begin
+        r_BPLxSHF[0] <= {r_BPLxSHF[0][18:0], 1'b0};
+        r_BPLxSHF[2] <= {r_BPLxSHF[2][18:0], 1'b0};
+        r_BPLxSHF[4] <= {r_BPLxSHF[4][18:0], 1'b0};
+      end
+
+      if (r_pf2_load && ((r_hpos[3:0] & w_delaymask) == r_PF2H)) begin
+        r_pf2_load <= 0;
+        if (r_bpl_ena[1]) r_BPLxSHF[1] <= {r_BPLxSHF[1][18:15], r_BPLxTMP[1]};
+        if (r_bpl_ena[3]) r_BPLxSHF[3] <= {r_BPLxSHF[3][18:15], r_BPLxTMP[3]};
+        if (r_bpl_ena[5]) r_BPLxSHF[5] <= {r_BPLxSHF[5][18:15], r_BPLxTMP[5]};
+
+      end else if (w_bpl_shift) begin
+        r_BPLxSHF[1] <= {r_BPLxSHF[1][18:0], 1'b0};
+        r_BPLxSHF[3] <= {r_BPLxSHF[3][18:0], 1'b0};
+        r_BPLxSHF[5] <= {r_BPLxSHF[5][18:0], 1'b0};
+      end
+
+      // Bitplane Bus
+      w_bpl_bus <= {
+        r_BPLxSHF[5][w_lol_select], r_BPLxSHF[4][w_lol_select],
+        r_BPLxSHF[3][w_lol_select], r_BPLxSHF[2][w_lol_select],
+        r_BPLxSHF[1][w_lol_select], r_BPLxSHF[0][w_lol_select]
+      } & {6{r_hwin_ena}};
+
+    end
+  end
+
+
+  //     ad88888ba                         88                                  
+  //    d8"     "8b                        ""   ,d                             
+  //    Y8,                                     88                             
+  //    `Y8aaaaa,   8b,dPPYba,  8b,dPPYba, 88 MM88MMM  ,adPPYba,               
+  //      `"""""8b, 88P'    "8a 88P'   "Y8 88   88    a8P_____88               
+  //            `8b 88       d8 88         88   88    8PP"""""""               
+  //    Y8a     a8P 88b,   ,a8" 88         88   88,   "8b,   ,aa               
+  //     "Y88888P"  88`YbbdP"'  88         88   "Y888  `"Ybbd8"'               
+  //                88                                                         
+  //                88                                                         
+
+  // Sprite Shifters
+  reg [19:0] r_SPRxSHFA [0:7];
+  reg [19:0] r_SPRxSHFB [0:7];
+  reg  [7:0] r_spr_lol  [0:7];
+
+  wire w_SPR_SHRES = (r_SPR_RES == 2'b11);
+  wire w_SPR_HIRES = (r_SPR_RES == 2'b10) || ((r_SPR_RES == 2'b00) && r_SHRES);
+  wire w_SPR_LORES = (r_SPR_RES == 2'b01) || ((r_SPR_RES == 2'b00) && ~r_SHRES);
+
+  reg [15:0] w_spr_bus;
+  reg [11:0] r_rhpos_lol;
+
+  integer i_spr;
+  always @(posedge clk) begin
+    // Sprites shift registers
+    if (!w_clk28) begin
+      r_rhpos_lol <= r_rhpos - (r_lol_ena ? 4 : 32);
+      for (i_spr = 0; i_spr < 8; i_spr = i_spr + 1) begin
+        r_enabled[i_spr] <= r_armed[i_spr];
+        if (r_enabled[i_spr] && (r_rhpos_lol == r_SPRxHPOS[i_spr])) begin
+          r_SPRxSHFA[i_spr] <= r_SPRxDATA[i_spr];
+          r_SPRxSHFB[i_spr] <= r_SPRxDATB[i_spr];
+
+        end else if((w_SPR_SHRES)
+                 || (w_SPR_HIRES && (r_rhpos[0:0] == r_SPRxHPOS[i_spr][0:0]))
+                 || (w_SPR_LORES && (r_rhpos[1:0] == r_SPRxHPOS[i_spr][1:0]))) begin
+          
+          r_SPRxSHFA[i_spr] <= {r_SPRxSHFA[i_spr][14:0], 1'b0};
+          r_SPRxSHFB[i_spr] <= {r_SPRxSHFB[i_spr][14:0], 1'b0};
         end
       end
+
+      // Sprite Bus
+      w_spr_bus <= {
+        r_SPRxSHFA[7][15], r_SPRxSHFB[7][15],
+        r_SPRxSHFA[6][15], r_SPRxSHFB[6][15],
+        r_SPRxSHFA[5][15], r_SPRxSHFB[5][15],
+        r_SPRxSHFA[4][15], r_SPRxSHFB[4][15],
+        r_SPRxSHFA[3][15], r_SPRxSHFB[3][15],
+        r_SPRxSHFA[2][15], r_SPRxSHFB[2][15],
+        r_SPRxSHFA[1][15], r_SPRxSHFB[1][15],
+        r_SPRxSHFA[0][15], r_SPRxSHFB[0][15]
+      } & {16{r_hwin_ena}};
     end
   end
 
-  // Data out to priority & clut
-  wire [15:0] w_spr_pixel_bus = {
-    r_spr_shift_A[0][15], r_spr_shift_B[0][15], r_spr_shift_A[1][15], r_spr_shift_B[1][15], 
-    r_spr_shift_A[2][15], r_spr_shift_B[2][15], r_spr_shift_A[3][15], r_spr_shift_B[3][15], 
-    r_spr_shift_A[4][15], r_spr_shift_B[4][15], r_spr_shift_A[5][15], r_spr_shift_B[5][15], 
-    r_spr_shift_A[6][15], r_spr_shift_B[6][15], r_spr_shift_A[7][15], r_spr_shift_B[7][15]
+  //      ,ad8888ba,              88  88  88           88                          
+  //     d8"'    `"8b             88  88  ""           ""                          
+  //    d8'                       88  88                                           
+  //    88             ,adPPYba,  88  88  88 ,adPPYba, 88  ,adPPYba,  8b,dPPYba,   
+  //    88            a8"     "8a 88  88  88 I8[    "" 88 a8"     "8a 88P'   `"8a  
+  //    Y8,           8b       d8 88  88  88  `"Y8ba,  88 8b       d8 88       88  
+  //     Y8a.    .a8P "8a,   ,a8" 88  88  88 aa    ]8I 88 "8a,   ,a8" 88       88  
+  //      `"Y8888Y"'   `"YbbdP"'  88  88  88 `"YbbdP"' 88  `"YbbdP"'  88       88  
+
+  // Sprite groups        
+  wire [3:0] w_spr_clx = {
+    (|w_spr_bus[3:0]   & r_ENSP[0]), (|w_spr_bus[7:4]   & r_ENSP[1]),
+    (|w_spr_bus[11:8]  & r_ENSP[2]), (|w_spr_bus[15:12] & r_ENSP[3])
   };
 
-  // Phase 2 -- bpl/spr colour determination
-  // Phase 3 -- colour look up table
-  // Phase 4 -- final pixel blending (HAM & EHB)
+  // Bitplane match
+  wire [5:0] w_bpl_clx = (w_bpl_bus ^ ~r_MVBP) | (~r_ENBP);
 
+  // Odd and even bitplanes match
+  wire   w_odd_clx  = w_bpl_clx[0] | w_bpl_clx[2] | w_bpl_clx[4];
+  wire   w_even_clx = w_bpl_clx[1] | w_bpl_clx[3] | w_bpl_clx[5];
 
-  //                                                                                 
-  //    88888888ba   88                                                  ad888888b,  
-  //    88      "8b  88                                                 d8"     "88  
-  //    88      ,8P  88                                                         a8P  
-  //    88aaaaaa8P'  88,dPPYba,   ,adPPYYba,  ,adPPYba,   ,adPPYba,          ,d8P"   
-  //    88""""""'    88P'    "8a  ""     `Y8  I8[    ""  a8P_____88        a8P"      
-  //    88           88       88  ,adPPPPP88   `"Y8ba,   8PP"""""""      a8P'        
-  //    88           88       88  88,    ,88  aa    ]8I  "8b,   ,aa     d8"          
-  //    88           88       88  `"8bbdP"Y8  `"YbbdP"'   `"Ybbd8"'     88888888888  
-  //                                                                                 
-  //                                                                                 
+  // Sprites-sprites collisions
+  assign w_CLXDAT[14] = w_spr_clx[2] & w_spr_clx[3]; // Sprites #4 and #6
+  assign w_CLXDAT[13] = w_spr_clx[1] & w_spr_clx[3]; // Sprites #2 and #6
+  assign w_CLXDAT[12] = w_spr_clx[1] & w_spr_clx[2]; // Sprites #2 and #4
+  assign w_CLXDAT[11] = w_spr_clx[0] & w_spr_clx[3]; // Sprites #0 and #6
+  assign w_CLXDAT[10] = w_spr_clx[0] & w_spr_clx[2]; // Sprites #0 and #4
+  assign w_CLXDAT[9]  = w_spr_clx[0] & w_spr_clx[1]; // Sprites #0 and #2
+  // Sprites-bitplanes collisions
+  assign w_CLXDAT[8]  = w_even_clx   & w_spr_clx[3]; // Even and Sprite #6
+  assign w_CLXDAT[7]  = w_even_clx   & w_spr_clx[2]; // Even and Sprite #4
+  assign w_CLXDAT[6]  = w_even_clx   & w_spr_clx[1]; // Even and Sprite #2
+  assign w_CLXDAT[5]  = w_even_clx   & w_spr_clx[0]; // Even and Sprite #0
+  assign w_CLXDAT[4]  = w_odd_clx    & w_spr_clx[3]; // Odd and Sprite #6
+  assign w_CLXDAT[3]  = w_odd_clx    & w_spr_clx[2]; // Odd and Sprite #4
+  assign w_CLXDAT[2]  = w_odd_clx    & w_spr_clx[1]; // Odd and Sprite #2
+  assign w_CLXDAT[1]  = w_odd_clx    & w_spr_clx[0]; // Odd and Sprite #0
+  // Bitplanes-bitplanes collisions
+  assign w_CLXDAT[0]  = w_odd_clx    & w_even_clx;
 
-  // From here, both bitplanes and sprites should be clocked the same
+  //    88888888ba             88                        88                      
+  //    88      "8b            ""                        ""   ,d                 
+  //    88      ,8P                                           88                 
+  //    88aaaaaa8P' 8b,dPPYba, 88  ,adPPYba,  8b,dPPYba, 88 MM88MMM 8b       d8  
+  //    88""""""'   88P'   "Y8 88 a8"     "8a 88P'   "Y8 88   88    `8b     d8'  
+  //    88          88         88 8b       d8 88         88   88     `8b   d8'   
+  //    88          88         88 "8a,   ,a8" 88         88   88,     `8b,d8'    
+  //    88          88         88  `"YbbdP"'  88         88   "Y888     Y88'     
+  //                                                                    d8'      
+  //                                                                   d8'         
 
-  // wire  [7:0] w_bpl_pixel_bus
-  // wire [15:0] w_spr_pixel_bus
+  // Playfield visible
+  reg [1:0] w_pf_vis;
+  always @(*) begin
+    // Playfields valid signal
+    if (r_DBLPF) begin
+      // Dual playfield mode
+      w_pf_vis[0] = w_bpl_bus[0] | w_bpl_bus[2] | w_bpl_bus[4];
+      w_pf_vis[1] = w_bpl_bus[1] | w_bpl_bus[3] | w_bpl_bus[5];
+    end else begin
+      // Single playfield mode
+      w_pf_vis[0] = 1'b0;
+      w_pf_vis[1] = |w_bpl_bus;
+    end
+  end
 
-  // Playfields
-
-  reg [5:0] r_pf_data_p2;
-  reg [1:0] r_pf_vld_p2;
-
-  // this is the important output from this phase
-  reg [5:0] r_bpl_clut_p2;
-
+  // Playfield Composition
+  reg [5:0] bpl_clut;
   always @(posedge clk) begin
-    if (w_pixel_clk) begin
-      // Masked playfields data
-      r_pf_data_p2[0] = w_bpl_pixel_bus[0];
-      r_pf_data_p2[1] = w_bpl_pixel_bus[1];
-      r_pf_data_p2[2] = w_bpl_pixel_bus[2];
-      r_pf_data_p2[3] = w_bpl_pixel_bus[3];
-      r_pf_data_p2[4] = w_bpl_pixel_bus[4];
-      r_pf_data_p2[5] = w_bpl_pixel_bus[5];
-
-      // Playfields valid signal
-      if (r_DBLPF) begin
-        // Dual playfield mode
-        r_pf_vld_p2[0] = r_pf_data_p2[0] | r_pf_data_p2[2] | r_pf_data_p2[4];
-        r_pf_vld_p2[1] = r_pf_data_p2[1] | r_pf_data_p2[3] | r_pf_data_p2[5];
-      end else begin
-        // Single playfield mode
-        r_pf_vld_p2[0] = 1'b0;
-        r_pf_vld_p2[1] = |r_pf_data_p2;
-      end
-
-      // Playfields 1 & 2 priority logic
+    if (w_clk28) begin
       if (r_DBLPF) begin
         // Dual playfield mode
         if (r_PF2PRI) begin
           // PF2 has priority
-          case (r_pf_vld_p2)
-            2'b00:   r_bpl_clut_p2 <= 6'b000000;
-            2'b01:   r_bpl_clut_p2 <= {3'b000, r_pf_data_p2[4], r_pf_data_p2[2], r_pf_data_p2[0]};
-            default: r_bpl_clut_p2 <= {3'b001, r_pf_data_p2[5], r_pf_data_p2[3], r_pf_data_p2[1]};
+          case (w_pf_vis)
+            2'b00   : bpl_clut <= 6'b000000;
+            2'b01   : bpl_clut <= { 3'b000, w_bpl_bus[4], w_bpl_bus[2], w_bpl_bus[0] };
+            default : bpl_clut <= { 3'b001, w_bpl_bus[5], w_bpl_bus[3], w_bpl_bus[1] };
           endcase
         end else begin
           // PF1 has priority
-          case (r_pf_vld_p2)
-            2'b00:   r_bpl_clut_p2 <= 6'b000000;
-            2'b10:   r_bpl_clut_p2 <= {3'b001, r_pf_data_p2[5], r_pf_data_p2[3], r_pf_data_p2[1]};
-            default: r_bpl_clut_p2 <= {3'b000, r_pf_data_p2[4], r_pf_data_p2[2], r_pf_data_p2[0]};
+          case (w_pf_vis)
+            2'b00   : bpl_clut <= 6'b000000;
+            2'b10   : bpl_clut <= { 3'b001, w_bpl_bus[5], w_bpl_bus[3], w_bpl_bus[1] };
+            default : bpl_clut <= { 3'b000, w_bpl_bus[4], w_bpl_bus[2], w_bpl_bus[0] };
           endcase
         end
       end else begin
         // Single playfield mode
-
-        // OCS/ECS undocumented behaviour
-        // PF2P > 5 (BPLCON2) and BITPLANES == 5 and NOT AGA
-        // - pixel in bitplane 5 = zero: planes 1-4 work normally (any color from 0-15 is possible)
-        // - pixel in bitplane 5 = one: planes 1-4 are disabled, only pixel from plane 5 is shown (color 16 is visible)
-        if ((r_PF2P[2:1] == 2'b11) && (r_BPU == 4'd5) && (r_pf_data_p2[4]))
-          r_bpl_clut_p2 <= 6'b010000;
+        if ((r_PF2P[2:1] == 2'b11) && (r_BPU == 3'd5) && (w_bpl_bus[4]))
+          // OCS/ECS undocumented behaviour
+          bpl_clut <= 6'b010000;
         else
           // Normal behaviour
-          r_bpl_clut_p2 <= r_pf_data_p2;
-      end
+          bpl_clut <= w_bpl_bus;
+      end        
     end
   end
 
-  // Sprites
+  // Sprite Composition
+  wire [2:0] spr_pri = {
+    (|w_spr_bus[3:0])   ? 3'd0 :      // Sprites #0 and #1 => group #0
+    (|w_spr_bus[7:4])   ? 3'd1 :      // Sprites #2 and #3 => group #1
+    (|w_spr_bus[11:8])  ? 3'd2 :      // Sprites #4 and #5 => group #2
+    (|w_spr_bus[15:12]) ? 3'd3 : 3'd7 // Sprites #6 and #7 => group #3
+  };
 
-  reg [1:0] r_spr_pix_p2 [0:7];
-  reg [3:0] r_spr_grp;
-  reg [2:0] r_spr_grp_vis_p2;
-  reg [2:0] r_idx_e_p2;
-  reg [2:0] r_idx_o_p2;
-  reg       r_spr_att_p2;
-  reg [1:0] r_spr_odd_p2;
-  reg [1:0] r_spr_even_p2;
-  reg [2:0] r_spr_bdr_vis_p2;
+  wire [1:0] spr_even = { w_spr_bus[{spr_pri[1:0], 2'b00}], w_spr_bus[{spr_pri[1:0], 2'b01}] };
+  wire [1:0] spr_odd  = { w_spr_bus[{spr_pri[1:0], 2'b10}], w_spr_bus[{spr_pri[1:0], 2'b11}] };
+  wire       spr_att  = r_SPRxATT[{spr_pri[1:0], 1'b1}] || (r_SPRxATT[{spr_pri[1:0], 1'b0}] && cfg_ecs);
 
-  // Meaningful outputs
-  reg [3:0] r_spr_clut_p2;
+  reg  [3:0] spr_clut;
+  reg        spr_vis;
 
-  // Sprites pixels and groups
   always @(posedge clk) begin
-    if (w_pixel_clk) begin
+    if (w_clk28) begin
+      spr_vis <= ~(((spr_pri[0] >= r_PF1P) && (w_pf_vis[0])) || // Playfield #1 test
+                   ((spr_pri[1] >= r_PF2P) && (w_pf_vis[1])) || // Playfield #2 test      
+                   ((spr_pri[2])));                             // No Sprites visible
 
-      // Sprites pixels values (shift registers outputs)
-      for (i = 0; i < 8; i = i + 1) begin
-        r_spr_pix_p2[i][0] = r_spr_shift_A[i][15];
-        r_spr_pix_p2[i][1] = r_spr_shift_B[i][15];
-      end
-
-      // Sprites #0 and #1 => group #0
-      // FIXME this is also used for groups
-      r_spr_grp[0] = ((r_spr_shift_A[0][15] | r_spr_shift_B[0][15]))
-                   | ((r_spr_shift_A[1][15] | r_spr_shift_B[1][15]));
-      // Sprites #2 and #3 => group #1
-      r_spr_grp[1] = ((r_spr_shift_A[2][15] | r_spr_shift_B[2][15]))
-                   | ((r_spr_shift_A[3][15] | r_spr_shift_B[3][15]));
-      // Sprites #4 and #5 => group #2
-      r_spr_grp[2] = ((r_spr_shift_A[4][15] | r_spr_shift_B[4][15]))
-                   | ((r_spr_shift_A[5][15] | r_spr_shift_B[5][15]));
-      // Sprites #6 and #7 => group #3
-      r_spr_grp[3] = ((r_spr_shift_A[6][15] | r_spr_shift_B[6][15]))
-                   | ((r_spr_shift_A[7][15] | r_spr_shift_B[7][15]));
-                   
-      // Visible group number
-      case (r_spr_grp)
-        4'b0000: r_spr_grp_vis_p2 = 3'd7;  // No sprite visible
-        4'bxxx1: r_spr_grp_vis_p2 = 3'd0;  // Sprite #0 or #1 visible
-        4'bxx10: r_spr_grp_vis_p2 = 3'd1;  // Sprite #2 or #3 visible
-        4'bx100: r_spr_grp_vis_p2 = 3'd2;  // Sprite #4 or #5 visible
-        4'b1000: r_spr_grp_vis_p2 = 3'd3;  // Sprite #6 or #7 visible
-        default: ;
-      endcase
-
-      // Sprites indexes
-      r_idx_e_p2 = {r_spr_grp_vis_p2[1:0], 1'b0};  // Even (0, 2, 4 ,6)
-      r_idx_o_p2 = {r_spr_grp_vis_p2[1:0], 1'b1};  // Odd (1, 3, 5, 7)
-
-      // Sprite attached flag
-      r_spr_att_p2 = r_SPRATT[r_idx_o_p2] | (r_SPRATT[r_idx_e_p2] & cfg_ecs);
-
-      // Odd and even sprites
-      r_spr_odd_p2  = r_spr_pix_p2[r_idx_o_p2];
-      r_spr_even_p2 = r_spr_pix_p2[r_idx_e_p2];
-
-      // Visible sprite index (masked by the horizontal window)
-      r_spr_bdr_vis_p2  <= r_spr_grp_vis_p2 | {3{~r_hwin_ena_p2}};
-
-      if (r_spr_att_p2)
-        // Attached mode : 15-color sprite
-        r_spr_clut_p2 <= { r_spr_odd_p2, r_spr_even_p2 };
-      else if (r_spr_even_p2 != 2'b00)
-        // Show even sprite with 3 colors
-        r_spr_clut_p2 <= { r_spr_grp_vis_p2[1:0], r_spr_even_p2 };
-      else
-        // Show odd sprite with 3 colors
-        r_spr_clut_p2 <= { r_spr_grp_vis_p2[1:0], r_spr_odd_p2 };
+           if (spr_att)   spr_clut <= { spr_odd, spr_even };      // Attached sprite
+      else if (|spr_even) spr_clut <= { spr_pri[1:0], spr_even }; // Even sprite
+      else                spr_clut <= { spr_pri[1:0], spr_odd };  // Odd sprite
 
     end
-  end
+  end  
 
+  //    88888888ba    ,ad8888ba,  88888888ba         ,ad8888ba,                                                        
+  //    88      "8b  d8"'    `"8b 88      "8b       d8"'    `"8b                ,d                              ,d     
+  //    88      ,8P d8'           88      ,8P      d8'        `8b               88                              88     
+  //    88aaaaaa8P' 88            88aaaaaa8P'      88          88 88       88 MM88MMM 8b,dPPYba,  88       88 MM88MMM  
+  //    88""""88'   88      88888 88""""""8b,      88          88 88       88   88    88P'    "8a 88       88   88     
+  //    88    `8b   Y8,        88 88      `8b      Y8,        ,8P 88       88   88    88       d8 88       88   88     
+  //    88     `8b   Y8a.    .a88 88      a8P       Y8a.    .a8P  "8a,   ,a88   88,   88b,   ,a8" "8a,   ,a88   88,    
+  //    88      `8b   `"Y88888P"  88888888P"         `"Y8888Y"'    `"YbbdP'Y8   "Y888 88`YbbdP"'   `"YbbdP'Y8   "Y888  
+  //                                                                                  88                               
+  //                                                                                  88                               
 
-  //                                                                                 
-  //    88888888ba   88                                                  ad888888b,  
-  //    88      "8b  88                                                 d8"     "88  
-  //    88      ,8P  88                                                         a8P  
-  //    88aaaaaa8P'  88,dPPYba,   ,adPPYYba,  ,adPPYba,   ,adPPYba,          aad8"   
-  //    88""""""'    88P'    "8a  ""     `Y8  I8[    ""  a8P_____88          ""Y8,   
-  //    88           88       88  ,adPPPPP88   `"Y8ba,   8PP"""""""             "8b  
-  //    88           88       88  88,    ,88  aa    ]8I  "8b,   ,aa     Y8,     a88  
-  //    88           88       88  `"8bbdP"Y8  `"YbbdP"'   `"Ybbd8"'      "Y888888P'  
-  //                                                                                 
-  //                                                                                 
-
-  // Colour look up tables
-  reg  [11:0] r_bpl_rgb_p3;
-  reg  [11:0] r_spr_rgb_p3;
-  
-  // Infered block RAM
-  reg  [11:0] r_mem_clut_a [0:31];
-  reg  [11:0] r_mem_clut_b [0:31];
-
-  // Write port
-  always@(posedge clk) begin
-    if (w_wregs_clut_p1 & cck_edge & cck) begin
-      r_mem_clut_a[r_rga_p1[5:1]] <= db_in[11:0];
-      r_mem_clut_b[r_rga_p1[5:1]] <= db_in[11:0];
-    end
-  end
-
-  reg  [2:0] r_spr_vis_p3;
-  reg        r_spr_sel_p3;
-
-  always@(posedge clk) begin
-    if (w_pixel_clk) begin
-      // Read bitplane colour
-      if (r_HOMOD) begin
-        case (r_bpl_clut_p2[5:4])
-          2'b00: r_bpl_rgb_p3       <= r_mem_clut_a[{ 1'b0, r_bpl_clut_p2[3:0]}]; // Select color
-          2'b01: r_bpl_rgb_p3[3:0]  <=                      r_bpl_clut_p2[3:0];   // Modify blue
-          2'b10: r_bpl_rgb_p3[11:8] <=                      r_bpl_clut_p2[3:0];   // Modify red
-          2'b11: r_bpl_rgb_p3[7:4]  <=                      r_bpl_clut_p2[3:0];   // Modify green
-        endcase
-      end
-      else if (r_bpl_clut_p2[5])
-        r_bpl_rgb_p3 <= { 1'b0, r_mem_clut_a[r_bpl_clut_p2[4:0]][11:1] & 11'b11101110111 };
-      else
-        r_bpl_rgb_p3 <= r_mem_clut_a[r_bpl_clut_p2[4:0]];
-
-      // Read sprite colour
-      r_spr_rgb_p3 <= r_mem_clut_b[{ 1'b1, r_spr_clut_p2[3:0] }];
-
-      // Sprite visible flags
-      // [0] : PF1 is in front of sprites
-      // [1] : PF2 is in front of sprites
-      // [2] : No sprite visible
-      r_spr_vis_p3[0] = (r_spr_bdr_vis_p2 >= r_PF1P) ? 1'b1 : 1'b0;
-      r_spr_vis_p3[1] = (r_spr_bdr_vis_p2 >= r_PF2P) ? 1'b1 : 1'b0;
-      r_spr_vis_p3[2] =  r_spr_bdr_vis_p2[2];
-
-      // Sprites/playfields test
-      if (((r_spr_vis_p3[0]) && (r_pf_vld_p2[0]))  // Playfield #1 test
-      ||  ((r_spr_vis_p3[1]) && (r_pf_vld_p2[1]))) // Playfield #2 test
-      begin
-        // Playfields in front of sprites
-        r_spr_sel_p3 <= 1'b0;
-      end else begin
-        // Sprites in front of playfields
-        if (r_spr_vis_p3[2]) begin
-          // No sprite visible : show playfields
-          r_spr_sel_p3 <= 1'b0;
-        end else begin
-          // Sprites visible
-          r_spr_sel_p3 <= 1'b1;
-        end
-      end      
-    end
-  end
-
-  //                                                                                   
-  //    88888888ba   88                                                         ,d8    
-  //    88      "8b  88                                                       ,d888    
-  //    88      ,8P  88                                                     ,d8" 88    
-  //    88aaaaaa8P'  88,dPPYba,   ,adPPYYba,  ,adPPYba,   ,adPPYba,       ,d8"   88    
-  //    88""""""'    88P'    "8a  ""     `Y8  I8[    ""  a8P_____88     ,d8"     88    
-  //    88           88       88  ,adPPPPP88   `"Y8ba,   8PP"""""""     8888888888888  
-  //    88           88       88  88,    ,88  aa    ]8I  "8b,   ,aa              88    
-  //    88           88       88  `"8bbdP"Y8  `"YbbdP"'   `"Ybbd8"'              88    
-  //                                                                                   
-  //       
-
-  // Colour MUX
-
+  reg [11:0] r_clut_hi;
+  reg [11:0] r_clut_lo;
   reg [11:0] r_rgb_out;
-  reg        r_blank_out;
+  reg [11:0] r_rgb_ham;
+  reg        r_zd_clut;
+  reg        r_zd;
+
+  always @(*) begin
+    r_zd_clut = (!(|bpl_clut) &&  ~r_ZDBPEN & ~r_ZDCTEN)
+              | (r_ZDBPEN & bpl_clut[r_ZDBPSEL])
+              | (r_COLOR_KEY[bpl_clut] & r_ZDCTEN);
+
+  end
 
   always @(posedge clk) begin
-    if (w_pixel_clk) begin
-      if (r_cblank_p4)        r_rgb_out <= 12'h000;
-      else if (r_spr_sel_p3)  r_rgb_out <= r_spr_rgb_p3;
-      else                    r_rgb_out <= r_bpl_rgb_p3;
+    // Get both colour lookups
+    r_clut_hi <= r_COLORxx_hi[(spr_vis || r_HOMOD) ? (spr_clut) : bpl_clut[3:0]];
+    r_clut_lo <= r_COLORxx_lo[bpl_clut[3:0]];
+
+    if (w_clk28) begin
+      // Tack our HAM even behind sprites
+      if (w_pixel_clk && r_HOMOD) case (bpl_clut[5:4])
+        2'b00 : r_rgb_ham       <= r_clut_lo;     // Select color
+        2'b01 : r_rgb_ham[3:0]  <= bpl_clut[3:0]; // Modify blue
+        2'b10 : r_rgb_ham[11:8] <= bpl_clut[3:0]; // Modify red
+        2'b11 : r_rgb_ham[7:4]  <= bpl_clut[3:0]; // Modify green
+      endcase
+    end
+
+    // Finally select our pixels
+    // if (r_cblank && r_BRDRBLNK) begin
+    //   r_rgb_out <= 12'h000;
+    //   r_zd <= r_BRDNTRAN;
+
+    // end else 
+    if (w_clk28 && spr_vis) begin
+      r_rgb_out <= r_clut_hi;
+      r_zd <= (r_COLOR_KEY[{1'b1, spr_clut}] & r_ZDCTEN);
+
+    end else if (w_pixel_clk) begin
+      if (r_HOMOD) begin
+        r_zd <= r_zd_clut && ~(|bpl_clut[5:4]);
+
+      end else if (bpl_clut[5] && ~r_KILLEHB) begin
+        r_rgb_out <= (bpl_clut[4])
+          ? { 1'b0, r_clut_hi[11:9], 1'b0, r_clut_hi[7:5], 1'b0, r_clut_hi[3:1] }
+          : { 1'b0, r_clut_lo[11:9], 1'b0, r_clut_lo[7:5], 1'b0, r_clut_lo[3:1] };
+        r_zd <= r_zd_clut;
+
+      end else begin
+        r_rgb_out <= (bpl_clut[4]) ? r_clut_hi : r_clut_lo;
+        r_zd <= r_zd_clut;
+
+      end
     end
   end
 
   // RGB output
-  assign red     = r_rgb_out[11:8];
-  assign green   = r_rgb_out[7:4];
-  assign blue    = r_rgb_out[3:0];
-  assign blank_n = r_blank_out;
-
+  assign red     = r_HOMOD ? r_rgb_ham[11:8] : r_rgb_out[11:8];
+  assign green   = r_HOMOD ? r_rgb_ham[7:4] : r_rgb_out[7:4];
+  assign blue    = r_HOMOD ? r_rgb_ham[3:0] : r_rgb_out[3:0];
+  assign zd      = r_zd;
+  assign burst   = r_cburst;
 endmodule

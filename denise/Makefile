@@ -10,7 +10,7 @@ stats: $(FILES)
 	yosys -p "tee -q hierarchy -top top; tee -q proc; tee -q opt; stat" $(FILES)
 
 %.json: $(FILES)
-	yosys -q -p "synth_ice40 -json $@" $(FILES)
+	yosys -q -p "synth_ice40 -json $@ -top top" $(FILES)
 
 %.asc: %.json $(PINMAP)
 	nextpnr-ice40  --freq 57 --$(DEVICE) --package $(PACKAGE) --pcf $(PINMAP) --json $< --asc $@
