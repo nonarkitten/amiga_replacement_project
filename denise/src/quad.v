@@ -18,7 +18,7 @@ always @(posedge clk)
         data[7:0] <= test[7:0];
 
     end else begin
-        if(cck) v <= quad; 
+        if(!cck) v <= quad; 
         else vq <= quad;
 
         if((data[1:0] == 2'b11) && (d == 2'b00)) 

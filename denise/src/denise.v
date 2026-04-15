@@ -7,16 +7,20 @@ module denise (
     // Main clock
     input clk,        // Master clock (28/56/85 MHz)
 
-    // Regenerated clocks
+    // Internal "clock aliases"
     input cck,        // CCK clock
     input cckq,       // CCK quadrature clock
     input c7m,        // 7MHz clock
     input cdac,       // 7MHz quadrature clock
+    input c14m,       // 14MHz clock
+    input c28m,       // 28MHz clock
 
     // Clock edges (56Mhz pulse)
-    input cck_edge,   // CCK edge
-    input cckq_edge,  // CCKQ edge
-    input cdac_edge,  // CDAC edge
+    input cck_e,   // CCK edge
+    input cckq_e,  // CCKQ edge
+    input cdac_e,  // CDAC edge
+    input c7m_e,
+    input c14m_e,
 
     // Mouse/Joystick
     input m0h,
@@ -48,10 +52,10 @@ module denise (
   reg [15:0] r_JOY1DAT;
   reg [15:0] r_JOYTEST;
 
-  quad m0v_quad(clk, cck, cck_edge, w_wregs_joyw_en, r_JOYTEST[15:8], m0v, r_JOY0DAT[15:8]);
-  quad m0h_quad(clk, cck, cck_edge, w_wregs_joyw_en, r_JOYTEST[7:0] , m0h, r_JOY0DAT[7:0] );
-  quad m1v_quad(clk, cck, cck_edge, w_wregs_joyw_en, r_JOYTEST[15:8], m1v, r_JOY1DAT[15:8]);
-  quad m1h_quad(clk, cck, cck_edge, w_wregs_joyw_en, r_JOYTEST[7:0] , m1h, r_JOY1DAT[7:0] );
+  quad m0v_quad(clk, cck, cck_e, w_wregs_joyw_en, r_JOYTEST[15:8], m0v, r_JOY0DAT[15:8]);
+  quad m0h_quad(clk, cck, cck_e, w_wregs_joyw_en, r_JOYTEST[7:0] , m0h, r_JOY0DAT[7:0] );
+  quad m1v_quad(clk, cck, cck_e, w_wregs_joyw_en, r_JOYTEST[15:8], m1v, r_JOY1DAT[15:8]);
+  quad m1h_quad(clk, cck, cck_e, w_wregs_joyw_en, r_JOYTEST[7:0] , m1h, r_JOY1DAT[7:0] );
 
   // CLXCON register
   reg   [3:0] r_ENSP;
@@ -108,7 +112,7 @@ module denise (
   reg   [15:0] r_SPRxDATB [0:7];
 
   // Internal ECS Registers
-  wire        w_clk28 = cck_edge | cckq_edge | cdac_edge;
+  // wire        c28m = cck_e | cckq_e | cdac_e;
   reg [10:0]  r_rhpos;                  // real hpos counter in shres pixels
 
   wire [8:0]  r_hpos   = r_rhpos[10:2]; // horizontal position counter (lores pixels)
@@ -149,6 +153,7 @@ module denise (
   wire w_rregs_joy1_en  = (r_rga_in[8:1] == 8'b0_0000_110);  // JOYxDAT  : $00C
   wire w_rregs_clx_en   = (r_rga_in[8:1] == 8'b0_0000_111);  // CLXDAT   : $00E
   wire w_rregs_id_en    = (r_rga_in[8:1] == 8'b0_0111_110);  // DENISEID : $07C
+  wire w_wregs_hpos_en  = (r_rga_in[8:1] == 8'b0_0111_110);  // VHPOS    : $02C
   wire w_wregs_joyw_en  = (r_rga_in[8:1] == 8'b0_0011_011);  // JOYTEST  : $036
   wire w_wregs_str_en   = (r_rga_in[8:1] == 8'b0_0011_1xx);  // Strobes  : $038 - $03E
   wire w_wregs_diwb_en  = (r_rga_in[8:1] == 8'b0_1000_111);  // DIWSTRT  : $08E
@@ -164,13 +169,13 @@ module denise (
   always @(posedge clk) begin
     
     // Latch RGA bits
-    if (cck_edge & cck) r_rga_in <= rga;      
+    if (cck_e & cck) r_rga_in <= rga;      
 
     // Read in DB bits for next cycle
     // Latch DB bits for next cycle
     r_db_in <= db_in;
 
-    if (cck_edge & cck) begin
+    if (cck_e & cck) begin
       if (w_wregs_joyw_en) begin
         r_JOYTEST <= r_db_in;
       end
@@ -283,6 +288,23 @@ module denise (
   //    Y8a.    .a8P "8a,   ,a8" "8a,   ,a88 88       88   88,   "8b,   ,aa 88         aa    ]8I
   //     `"Y8888Y"'   `"YbbdP"'   `"YbbdP'Y8 88       88   "Y888  `"Ybbd8"' 88         `"YbbdP"'
 
+  // Verified inner workings
+  //
+  // HPOS AGA/ECS
+  // [10:1] Counter 10-bit (on C14M)
+  // [0]    14MHz Generated clock (C14M)
+  // RESET: 10'b00000100
+  //
+  // OCS
+  // [10:3] Counter 8-bit (on CCK)
+  // [2]    Colour Clock (CCK)
+  // [1:0]  N/A
+  // RESET: 8'bb000001
+  
+  // LOAD is always into HPOS [10:3]
+  // RESET is triggered by one of STRHOR, STREQU or STRVBL.
+  
+  // Lie: Commodore HRM says VHPOS is Agnus only
 
   reg r_vwin_ena_;
   reg r_hwin_ena_;
@@ -290,30 +312,36 @@ module denise (
   reg r_cburst;
 
   always @(posedge clk) begin
-    // The low three bits are created by the clocks alone
-    r_rhpos[2:0] <= {
-      !(cck),       // lores bits
-      !(c7m),       // hires bits
-      !(c7m ^ cdac) // superhires bits
-    };
+    r_rhpos[0] <= ~c14m;
+    if (c14m_e && ~c14m) begin
+      if (cck_e && cck && w_wregs_str_en)
+        r_rhpos[10:1] <= 8'b0000000100;
+      else if (cck_e && cck && w_wregs_hpos_en)
+        r_rhpos[10:1] <= { db_in[7:0], 2'b00 };
+      else
+        r_rhpos[10:1] <= r_rhpos[10:1] + 1;
+    end
 
-    if (w_clk28) begin
+    // The low three bits are created by the clocks alone
+    // r_rhpos[2:0] <= {
+    //   !(cck),       // lores bits
+    //   !(c7m),       // hires bits
+    //   !(c7m ^ cdac) // superhires bits
+    // };
+
+    // if (c28m) begin
       // clear the high bits when told to
-      if ((r_rhpos[10:2] == 9'h1C8) || (cck_edge && cck && w_wregs_str_en && (r_rga_in[2:1] != 2'b11)))
-        r_rhpos[10:3] <= 8'h01;
+      // if ((r_rhpos[10:2] == 9'h1C8) || (cck_e && cck && w_wregs_str_en && (r_rga_in[2:1] != 2'b11)))
+      //   r_rhpos[10:3] <= 8'h01;
       
-      // low three bits are going to roll over, so increment
-      else if ((r_rhpos[2:0] == 3'b111))
-        r_rhpos[10:3] <= r_rhpos[10:3] + 1;
+      // // low three bits are going to roll over, so increment
+      // else if ((r_rhpos[2:0] == 3'b111))
+      //   r_rhpos[10:3] <= r_rhpos[10:3] + 1;
 
       if (r_hpos == 9'h013)          r_vwin_ena_ <= 1'b0;
       else if (w_wregs_bpl_en)       r_vwin_ena_ <= 1'b1;
       if (r_hpos == r_HDIWSTRT)      r_hwin_ena_ <= 1'b1;
       else if (r_hpos == r_HDIWSTOP) r_hwin_ena_ <= 1'b0;
-
-        //      if ((r_hpos) == r_HDIWSTRT) r_hwin_ena <= ~r_vblank; // Display window horizontal start
-        // else if ((r_hpos) == r_HDIWSTOP) r_hwin_ena <= 1'b0;      // Display window horizontal stop
-      // end
 
       if (r_hpos == 9'h013) r_hblank <= 1'b1;        // Horizontal blank start
       if (r_hpos == 9'h061) r_hblank <= 1'b0;        // Horizontal blank stop      
@@ -324,7 +352,7 @@ module denise (
       r_vblank_p <= r_vblank;
       r_cblank   <= r_hblank || r_vblank;
 
-    end
+    // end
   end
 
   // Bitplane decoder (async)
@@ -338,7 +366,7 @@ module denise (
     (r_BPU == 3'd6) ? 8'b00111111 : 
                       8'b01111111 ;
    
-  wire w_pixel_clk = (cck_edge) || (cckq_edge && (r_HIRES || r_SHRES)) || (cdac_edge && r_SHRES);
+  wire w_pixel_clk = (cck_e) || (cckq_e && (r_HIRES || r_SHRES)) || (cdac_e && r_SHRES);
 
   //    88888888ba  88                     88                                    
   //    88      "8b ""   ,d                88                                    
@@ -367,7 +395,7 @@ module denise (
   reg [5:0] w_bpl_bus;
 
   always @(posedge clk) begin
-    if (cck_edge & cck && w_wregs_bpl_en) begin
+    if (cck_e & cck && w_wregs_bpl_en) begin
       case (r_rga_in[3:1])
         3'd0 : begin
           r_BPLxTMP[0] <= r_db_in;
@@ -388,7 +416,7 @@ module denise (
       endcase
     end
 
-    if (w_clk28) begin
+    if (c28m) begin
       if (r_pf1_load && ((r_hpos[3:0] & w_delaymask) == r_PF1H)) begin
         r_pf1_load <= 0;
         if (r_bpl_ena[0]) r_BPLxSHF[0] <= {r_BPLxSHF[0][18:15], r_BPLxTMP[0]};
@@ -450,7 +478,7 @@ module denise (
   integer i_spr;
   always @(posedge clk) begin
     // Sprites shift registers
-    if (!w_clk28) begin
+    if (!c28m) begin
       r_rhpos_lol <= r_rhpos - (r_lol_ena ? 4 : 32);
       for (i_spr = 0; i_spr < 8; i_spr = i_spr + 1) begin
         r_enabled[i_spr] <= r_armed[i_spr];
@@ -551,7 +579,7 @@ module denise (
   // Playfield Composition
   reg [5:0] bpl_clut;
   always @(posedge clk) begin
-    if (w_clk28) begin
+    if (c28m) begin
       if (r_DBLPF) begin
         // Dual playfield mode
         if (r_PF2PRI) begin
@@ -597,7 +625,7 @@ module denise (
   reg        spr_vis;
 
   always @(posedge clk) begin
-    if (w_clk28) begin
+    if (c28m) begin
       spr_vis <= ~(((spr_pri[0] >= r_PF1P) && (w_pf_vis[0])) || // Playfield #1 test
                    ((spr_pri[1] >= r_PF2P) && (w_pf_vis[1])) || // Playfield #2 test      
                    ((spr_pri[2])));                             // No Sprites visible
@@ -639,7 +667,7 @@ module denise (
     r_clut_hi <= r_COLORxx_hi[(spr_vis || r_HOMOD) ? (spr_clut) : bpl_clut[3:0]];
     r_clut_lo <= r_COLORxx_lo[bpl_clut[3:0]];
 
-    if (w_clk28) begin
+    if (c28m) begin
       // Tack our HAM even behind sprites
       if (w_pixel_clk && r_HOMOD) case (bpl_clut[5:4])
         2'b00 : r_rgb_ham       <= r_clut_lo;     // Select color
@@ -655,7 +683,7 @@ module denise (
     //   r_zd <= r_BRDNTRAN;
 
     // end else 
-    if (w_clk28 && spr_vis) begin
+    if (c28m && spr_vis) begin
       r_rgb_out <= r_clut_hi;
       r_zd <= (r_COLOR_KEY[{1'b1, spr_clut}] & r_ZDCTEN);
 
