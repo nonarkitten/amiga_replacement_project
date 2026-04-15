@@ -3,7 +3,11 @@
 //  
 // See README.md for details
 
-module denise (
+module denise #(
+    // Configuration
+    parameter cfg_ecs = 1'b1,  // OCS(0) or ECS(1) chipset
+    parameter cfg_a1k = 1'b0   // Normal mode(0), A1000 mode(1)
+  ) (
     // Main clock
     input clk,        // Master clock (28/56/85 MHz)
 
@@ -27,10 +31,6 @@ module denise (
     input m0v,
     input m1h,
     input m1v,
-
-    // Configuration
-    input cfg_ecs,  // OCS(0) or ECS(1) chipset
-    input cfg_a1k,  // Normal mode(0), A1000 mode(1)
 
     // Busses
     input  [ 8:1] rga,     // RGA bus

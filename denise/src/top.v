@@ -143,7 +143,11 @@ wire [3:0] w_blue;
 wire       w_zd;
 wire       w_burst;
 
-denise denise(
+denise #(
+    // Config
+    .cfg_ecs(1'b1),
+    .cfg_a1k(1'b0)
+) denise (
     // Clock (actual)
     .clk(clk_56m),
 
@@ -167,10 +171,6 @@ denise denise(
     .m0v(M0V),
     .m1h(M1H),
     .m1v(M1V),
-
-    // Config
-    .cfg_ecs(1'b1),
-    .cfg_a1k(1'b0),
 
     // Bus Input/Output
     .rga(w_rga),
