@@ -5,7 +5,8 @@
 
 module denise #(
     // Configuration
-    parameter cfg_ecs = 1'b1,  // OCS(0) or ECS(1) chipset
+    parameter cfg_aga = 1'b0,  // Enable AGA-specific features
+    parameter cfg_ecs = 1'b1,  // Enable ECS-specific features
     parameter cfg_a1k = 1'b0   // Normal mode(0), A1000 mode(1)
   ) (
     // Main clock
@@ -76,11 +77,16 @@ module denise #(
   wire [14:0] w_CLXDAT;
 
   // BPLCON0 register
-  reg         r_HIRES;
-  reg         r_SHRES;
-  reg   [2:0] r_BPU;
-  reg         r_HOMOD;
-  reg         r_DBLPF;
+  reg         r_HIRES;  // High resoloution (640*200/640*400 interlace)
+  reg   [3:0] r_BPU;    // Bit plane use code 0000-1000
+  reg         r_HOMOD;  // Hold and modify mode
+  reg         r_DBLPF;  // Double playfield (PFI=odd FP2= even bit planes)
+  reg         r_COLOR;  // Enables color burst output signal
+  reg         r_GAUD;   // Genlock audio enable
+  reg         r_UHRES;  // Enables the UHRES pointers (for 1k*1k) 
+  reg         r_SHRES;  // Super hi-res mode (35ns pixel width)
+  reg         r_BYPASS; // Bypass color table and 8 bit wide data appear on R(7:0)
+  reg         r_ECSENA; // When low (default), select bits in BPLCON3 are disabled
 
   // BPLCON1 register
   reg   [3:0] r_PF1H;
@@ -169,6 +175,11 @@ module denise #(
   wire w_wregs_hpos_en  = (r_rga_in[8:1] == 8'b0_0111_110);  // VHPOS    : $02C
   wire w_wregs_joyw_en  = (r_rga_in[8:1] == 8'b0_0011_011);  // JOYTEST  : $036
   wire w_wregs_str_en   = (r_rga_in[8:1] == 8'b0_0011_1xx);  // Strobes  : $038 - $03E
+                                                             // $038 STREQU
+                                                             // $03A STRVBL
+                                                             // $03C STRHOR
+                                                             // $03E STRLONG
+
   wire w_wregs_diwb_en  = (r_rga_in[8:1] == 8'b0_1000_111);  // DIWSTRT  : $08E
   wire w_wregs_diwe_en  = (r_rga_in[8:1] == 8'b0_1001_000);  // DIWSTOP  : $090
   wire w_wregs_clx_en   = (r_rga_in[8:1] == 8'b0_1001_100);  // CLXCON   : $098
@@ -242,7 +253,7 @@ module denise #(
         // BPLCON0
         2'b00 : begin
           r_HIRES    <= r_db_in[15];
-          r_BPU      <= r_db_in[14:12];
+          r_BPU      <= { r_db_in[4] && cfg_aga, r_db_in[14:12] };
           r_HOMOD    <= r_db_in[11];
           r_DBLPF    <= r_db_in[10];
           r_SHRES    <= r_db_in[6]     && cfg_ecs;
@@ -329,7 +340,7 @@ module denise #(
   reg r_vwin_ena_;
   reg r_hwin_ena_;
   wire r_hwin_ena = r_vwin_ena_ & r_hwin_ena_;
-  reg r_cburst;
+  // reg r_cburst;
 
   always @(posedge clk) begin
     r_rhpos[0] <= ~c14m;
@@ -341,40 +352,56 @@ module denise #(
       else
         r_rhpos[10:1] <= r_rhpos[10:1] + 1;
     end
+  end
 
-    // The low three bits are created by the clocks alone
-    // r_rhpos[2:0] <= {
-    //   !(cck),       // lores bits
-    //   !(c7m),       // hires bits
-    //   !(c7m ^ cdac) // superhires bits
-    // };
-
-    // if (c28m) begin
-      // clear the high bits when told to
-      // if ((r_rhpos[10:2] == 9'h1C8) || (cck_e && cck && w_wregs_str_en && (r_rga_in[2:1] != 2'b11)))
-      //   r_rhpos[10:3] <= 8'h01;
-      
-      // // low three bits are going to roll over, so increment
-      // else if ((r_rhpos[2:0] == 3'b111))
-      //   r_rhpos[10:3] <= r_rhpos[10:3] + 1;
-
+  // diwcmp
+  always @(posedge clk) begin
+    if (c28m) begin
       if (r_hpos == 9'h013)          r_vwin_ena_ <= 1'b0;
       else if (w_wregs_bpl_en)       r_vwin_ena_ <= 1'b1;
       if (r_hpos == r_HDIWSTRT)      r_hwin_ena_ <= 1'b1;
       else if (r_hpos == r_HDIWSTOP) r_hwin_ena_ <= 1'b0;
+    end
+  end
 
-      if (r_rhpos ==  11'h040) r_hblank <= 1'b1;        // Horizontal blank start
-      if (r_rhpos == r_HBSTRT) r_hblank <= 1'b1;        // Horizontal blank start
-      if (r_hpos  ==  11'h174) r_hblank <= 1'b0;        // Horizontal blank stop      
-      if (r_hpos  == r_HBSTOP) r_hblank <= 1'b0;        // Horizontal blank stop      
+  // blkcmp
+  always @(posedge clk) begin
+    if (c28m) begin
+      if (r_rhpos ==  11'h040) r_hblank <= 1'b1;     // Horizontal blank start
+      if (r_rhpos == r_HBSTRT) r_hblank <= 1'b1;     // Horizontal blank start
+      if (r_hpos  ==  11'h174) r_hblank <= 1'b0;     // Horizontal blank stop      
+      if (r_hpos  == r_HBSTOP) r_hblank <= 1'b0;     // Horizontal blank stop      
+    end
+  end
 
-      if (r_hpos == 9'h026) r_cburst <= cck;         // Colour burst start
-      if (r_hpos == 9'h04E) r_cburst <= 1'b0;        // Colour burst stop      
+  // brscmp
+  reg brston, brtsoff;
+  always @(posedge clk) begin
+    if (c28m) begin
+      brston <=  (r_hpos == 9'h026);         // Colour burst start
+      brtsoff <= (r_hpos == 9'h04E);        // Colour burst stop      
 
       r_vblank_p <= r_vblank;
       r_cblank   <= r_hblank || r_vblank;
 
-    // end
+    end
+  end
+
+  // bstcmp
+  reg bwin;
+  reg ben;
+  always @(*) begin
+    if (brston) bwin = 1;
+    if (brtsoff) bwin = 0;
+    if (wen1 && w_wregs_str_en) begin
+      if (r_rga_in[2:1] == 2'b01) ben = 1;
+      if (r_rga_in[2:1] == 2'b00) ben = 0;
+    end
+  end
+
+  reg r_cburst;
+  always @(posedge clk) begin
+    r_cburst <= bwin && ben && !r_COLOR;
   end
 
   // Bitplane decoder (async)
@@ -385,8 +412,9 @@ module denise #(
     (r_BPU == 3'd3) ? 8'b00000111 :
     (r_BPU == 3'd4) ? 8'b00001111 :
     (r_BPU == 3'd5) ? 8'b00011111 :
-    (r_BPU == 3'd6) ? 8'b00111111 : 
-                      8'b01111111 ;
+    (r_BPU == 3'd6) ? 8'b00111111 :
+    (r_BPU == 3'd7) ? 8'b01111111 :
+                      8'b11111111 ; // 1xxx all 8bpp
    
   wire w_pixel_clk = (cck_e) || (cckq_e && (r_HIRES || r_SHRES)) || (cdac_e && r_SHRES);
 
