@@ -46,7 +46,16 @@ module denise #(
     output           burst     // Composite color burst
   );
 
-
+  // Commodore loved puns; WEN is *when* we ought to do one of two things
+  // from the external bus world
+  reg wen1, wen2;
+  always @(posedge clk) begin
+    if (c7m_e && !c7m) begin
+      wen1 <=  cck;
+      wen2 <= ~cck;
+    end
+  end
+  
   // JOYxDAT registers
   reg [15:0] r_JOY0DAT;
   reg [15:0] r_JOY1DAT;
@@ -101,9 +110,13 @@ module denise #(
   reg   [11:0] r_COLORxx_hi [0:15]; // COLOR16-COLOR31
   reg          r_COLOR_KEY  [0:31];
 
-  // DIWSTRT, DIWSTOP and DIWHIGH regisers
+  // DIWSTRT, DIWSTOP and DIWHIGH (DIsplay Window) regisers
   reg    [8:0] r_HDIWSTRT;
   reg    [8:0] r_HDIWSTOP;
+
+  // HBSTRT, HBSTOP (Horizontal Blank) registers
+  reg   [10:0] r_HBSTRT;
+  reg   [10:0] r_HBSTOP;
 
   // Sprite Registers  
   reg          r_SPRxATT  [0:7];
@@ -147,7 +160,7 @@ module denise #(
   //  88       8P 8PP""""""" 8b         8b       d8 8b       88 8PP""""""" 88   `8b   Y8,       88  d8""""""""8b    
   //  88    .a8P  "8b,   ,aa "8a,   ,aa "8a,   ,a8" "8a,   ,d88 "8b,   ,aa 88    `8b   Y8a.   .a88 d8'        `8b   
   //  888888Y"'    `"Ybbd8"'  `"Ybbd8"'  `"YbbdP"'   `"8bbdP"Y8  `"Ybbd8"' 88     `8b   `"Y8888P" d8'          `8b  
-
+                                           
   // Comparators
   wire w_rregs_joy0_en  = (r_rga_in[8:1] == 8'b0_0000_101);  // JOYxDAT  : $00A
   wire w_rregs_joy1_en  = (r_rga_in[8:1] == 8'b0_0000_110);  // JOYxDAT  : $00C
@@ -267,6 +280,13 @@ module denise #(
       end
 
       if (w_wregs_diwb_en) begin
+        r_HBSTRT <= {r_db_in[7:0], r_db_in[10:8] && {3{cfg_ecs}}};
+      end
+      if (w_wregs_diwe_en) begin
+        r_HBSTOP <= {r_db_in[7:0], r_db_in[10:8] && {3{cfg_ecs}}};
+      end      
+
+      if (w_wregs_diwb_en) begin
         r_HDIWSTRT <= {1'b0, r_db_in[7:0]};
       end
       if (w_wregs_diwe_en) begin
@@ -343,8 +363,10 @@ module denise #(
       if (r_hpos == r_HDIWSTRT)      r_hwin_ena_ <= 1'b1;
       else if (r_hpos == r_HDIWSTOP) r_hwin_ena_ <= 1'b0;
 
-      if (r_hpos == 9'h013) r_hblank <= 1'b1;        // Horizontal blank start
-      if (r_hpos == 9'h061) r_hblank <= 1'b0;        // Horizontal blank stop      
+      if (r_rhpos ==  11'h040) r_hblank <= 1'b1;        // Horizontal blank start
+      if (r_rhpos == r_HBSTRT) r_hblank <= 1'b1;        // Horizontal blank start
+      if (r_hpos  ==  11'h174) r_hblank <= 1'b0;        // Horizontal blank stop      
+      if (r_hpos  == r_HBSTOP) r_hblank <= 1'b0;        // Horizontal blank stop      
 
       if (r_hpos == 9'h026) r_cburst <= cck;         // Colour burst start
       if (r_hpos == 9'h04E) r_cburst <= 1'b0;        // Colour burst stop      
