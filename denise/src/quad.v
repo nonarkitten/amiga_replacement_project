@@ -1,11 +1,13 @@
+`timescale 1ps/1ps
+
 module quad(
     input            clk,
     input            cck,
     input            cck_edge,
     input            load_test,
     input      [7:0] test,
-    input            quad,
-    output reg [7:0] data
+    input            data,
+    output reg [7:0] counter
 );
 
 reg        v;
@@ -15,18 +17,18 @@ wire [1:0] d = { !vq, vq ^ v };
 always @(posedge clk)
   if (cck_edge) begin
     if(load_test) begin
-        data[7:0] <= test[7:0];
+        counter[7:0] <= test[7:0];
 
     end else begin
-        if(!cck) v <= quad; 
-        else vq <= quad;
+        if(!cck) v <= data; 
+        else vq <= data;
 
-        if((data[1:0] == 2'b11) && (d == 2'b00)) 
-            data[7:2] <= data[7:2] + 6'd1;
-        if((data[1:0] == 2'b00) && (d == 2'b11)) 
-            data[7:2] <= data[7:2] - 6'd1;
+        if((counter[1:0] == 2'b11) && (d == 2'b00)) 
+            counter[7:2] <= counter[7:2] + 6'd1;
+        if((counter[1:0] == 2'b00) && (d == 2'b11)) 
+            counter[7:2] <= counter[7:2] - 6'd1;
                 
-        data[1:0] <= d;
+        counter[1:0] <= d;
     end
   end
 endmodule
